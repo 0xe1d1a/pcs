@@ -116,8 +116,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 		t_next = t_temp;
 	}
 
-	report_results(p, r);
-
 	free(t_prev);
 	free(t_next);
 }
