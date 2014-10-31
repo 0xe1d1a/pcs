@@ -19,28 +19,27 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 	// iteration count
 	size_t iter = 0;
-
+	
+	
+	
 	r->maxdiff = DBL_MAX; // something comfortably over the threshold
+	//while (r->maxdiff >= p->threshold && iter++ < p->maxiter) {
+	while (1) {
+		int done = 0;
+		int do_reduction = 0;
+		if (iter++ >= p->maxiter) done = 1;
+		do_reduction = done;
+		if (iter % p->period == 0) do_reduction = 1;
 
-	while (r->maxdiff >= p->threshold && iter++ < p->maxiter) {
-		if (iter != 1 && (r->niter % p->period == 0)) {
-			begin_picture(iter, p->M, p->N, p->io_tmin, p->io_tmax);
-			double *tptr = t_prev;
-			for (size_t y = 0; y < p->N; ++y) {
-				for (size_t x = 0; x < p->M; ++x) {
-					draw_point(x, y, *tptr++);
-				}
-			}
-			end_picture();
-			report_results(p, r);
+		if (do_reduction) {
+			// FIXME: update time
+			r->niter = iter;
+			r->tmin = DBL_MAX;
+			r->tmax = DBL_MIN;
+			r->maxdiff = DBL_MIN;
+			r->tavg = 0.0; // we don't care about the fp inaccuracy, right?
 		}
 
-		// FIXME: update time
-		r->niter = iter;
-		r->tmin = DBL_MAX;
-		r->tmax = DBL_MIN;
-		r->maxdiff = DBL_MIN;
-		r->tavg = 0.0; // we don't care about the fp inaccuracy, right?
 
 		// N rows, M columns
 		double *dst = t_next;
@@ -86,9 +85,23 @@ void do_compute(const struct parameters* p, struct results *r) {
 					r->maxdiff = diff;
 			}
 		}
+		if (do_reduction) {
+			r->tavg /= (p->N * p->M);
+			if (r->maxdiff < p->threshold) done = 1;
+			if(p->printreports) {
+				begin_picture(iter, p->M, p->N, p->io_tmin, p->io_tmax);
+				double *tptr = t_prev;
+				for (size_t y = 0; y < p->N; ++y) {
+					for (size_t x = 0; x < p->M; ++x) {
+						draw_point(x, y, *tptr++);
+					}
+				}
+				end_picture();
+				report_results(p, r);
+			}
+		}
 
-		r->tavg /= (p->N * p->M);
-
+		if (done) break;
 		// swap the buffers
 		double *t_temp;
 		t_temp = t_prev;
