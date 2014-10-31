@@ -73,16 +73,18 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 				*dst = result;
 
-				// FIXME: don't do this if we don't need it
-				if (result < r->tmin)
-					r->tmin = result;
-				if (result > r->tmax)
-					r->tmax = result;
-				r->tavg += result;
+				if (do_reduction) {
+					// FIXME: don't do this if we don't need it
+					if (result < r->tmin)
+						r->tmin = result;
+					if (result > r->tmax)
+						r->tmax = result;
+					r->tavg += result;
 
-				double diff = abs(row[x] - *dst);
-				if (diff > r->maxdiff)
-					r->maxdiff = diff;
+					double diff = abs(row[x] - *dst);
+					if (diff > r->maxdiff)
+						r->maxdiff = diff;
+				}
 			}
 		}
 		if (do_reduction) {
