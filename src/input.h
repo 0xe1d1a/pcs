@@ -11,8 +11,11 @@ struct parameters {
     /* maximum number of iterations */
     size_t maxiter;
 
-    /* number of iterations for the periodic report */
+    /* number of iterations for the periodic reduction */
     size_t period;
+
+    /* print a report every reduction cycle */
+    size_t printreports;
 
     /* convergence threshold */
     double threshold; 

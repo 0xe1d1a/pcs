@@ -21,13 +21,14 @@ static void usage(const char *pname)
            "  -n NUM     Set cylinder height to ROWS.\n"
            "  -m NUM     Set cylinder width to COLUMNS.\n"
            "  -i NUM     Set the maximum number of iterations to NUM.\n"
-           "  -k NUM     Set the reporting period to NUM.\n"
+           "  -k NUM     Set the reduction period to NUM.\n"
            "  -e NUM     The the convergence threshold to NUM.\n"
            "  -c FILE    Read conductivity values from FILE.\n"
            "  -t FILE    Read initial temperature values from FILE.\n"
            "  -L NUM     Coldest temperature in input/output images.\n"
            "  -H NUM     Warmest temperature in input/output images.\n"
            "  -p NUM     Number of threads to use (when applicable).\n"
+           "  -r         Print a report every reduction cycle.\n"
            "  -h         Print this help.\n"
            "\n" PACKAGE_NAME "-" PACKAGE_VERSION "\n"
            "Contact: " PACKAGE_BUGREPORT "\n",
@@ -85,10 +86,11 @@ void read_parameters(struct parameters* p, int argc, char **argv)
     p->io_tmin = -100.0;
     p->io_tmax = 100.0;
     p->nthreads = 1;
+    p->printreports = 0;
     conductivity_fname = "pattern_100x150.pgm";
     tinit_fname = "pattern_100x150.pgm";
 
-    while ((ch = getopt(argc, argv, "c:e:hH:i:k:L:m:M:n:N:p:t:")) != -1)
+    while ((ch = getopt(argc, argv, "c:e:hH:i:k:L:m:M:n:N:p:t:r")) != -1)
     {
         switch(ch) {
         case 'c': conductivity_fname = optarg; break;
@@ -101,6 +103,7 @@ void read_parameters(struct parameters* p, int argc, char **argv)
         case 'L': p->io_tmin = strtod(optarg, 0); break;
         case 'H': p->io_tmax = strtod(optarg, 0); break;
         case 'p': p->nthreads = strtol(optarg, 0, 10); break;
+        case 'r': p->printreports = 1; break;
         case 'h': default: usage(argv[0]);
         }
     }
@@ -109,18 +112,19 @@ void read_parameters(struct parameters* p, int argc, char **argv)
            "  -n %zu # number of rows\n"
            "  -m %zu # number of columns\n"
            "  -i %zu # maximum number of iterations\n"
-           "  -k %zu # reporting period\n"
+           "  -k %zu # reduction period\n"
            "  -e %e # convergence threshold\n"
            "  -c %s # input file for conductivity\n"
            "  -t %s # input file for initial temperatures\n"
            "  -L %e # coolest temperature in input/output\n"
            "  -H %e # highest temperature in input/output\n"
-           "  -p %zu # number of threads (if applicable)\n",
+           "  -p %zu # number of threads (if applicable)\n"
+           "  -r %d # print intermediate reports every reduction cycle\n",
            p->N, p->M, p->maxiter, p->period, p->threshold,
            conductivity_fname ? conductivity_fname : "(none)",
            tinit_fname ? tinit_fname : "(none)",
            p->io_tmin, p->io_tmax,
-           p->nthreads);
+           p->nthreads, p->printreports);
 
     if (!p->N || !p->M) die("empty grid");
 
