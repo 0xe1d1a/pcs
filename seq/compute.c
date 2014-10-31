@@ -20,7 +20,8 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// iteration count
 	size_t iter = 0;
 	
-	
+	struct timeval tv_start, tv_curr, tv_diff;
+	gettimeofday(&tv_start, NULL);
 	
 	r->maxdiff = DBL_MAX; // something comfortably over the threshold
 	//while (r->maxdiff >= p->threshold && iter++ < p->maxiter) {
@@ -88,6 +89,10 @@ void do_compute(const struct parameters* p, struct results *r) {
 			}
 		}
 		if (do_reduction) {
+			gettimeofday(&tv_curr, NULL);
+			timersub(&tv_curr, &tv_start, &tv_diff);
+			r->time = tv_diff.tv_sec + (tv_diff.tv_usec / 1000000.0);
+
 			r->tavg /= (p->N * p->M);
 			if (r->maxdiff < p->threshold) done = 1;
 			if(p->printreports) {
