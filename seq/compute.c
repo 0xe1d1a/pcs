@@ -49,7 +49,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 	while (TRUE) { 
 		int done = 0;
 		int do_reduction = 0;
-		if (iter++ >= p->maxiter) done = 1; // do the final iteration and finish
+		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
 		do_reduction = done; // if we are done do a final reduction
 		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
 
