@@ -1,9 +1,9 @@
 Initial execution times (commit: d5216b26eaeb8f8bbce602550012abcfcad1fde7)
 
-./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pa$
+./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 20 
 Execution time: 0.268016
 
-./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pa$
+./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 20 -i 20 
 Execution time: 0.173204
 
 ./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 100000 -i 5000
