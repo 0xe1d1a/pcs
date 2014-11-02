@@ -1,0 +1,20 @@
+Initial execution times (commit: d5216b26eaeb8f8bbce602550012abcfcad1fde7)
+
+./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pa$
+Execution time: 0.268016
+
+./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pa$
+Execution time: 0.173204
+
+./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 100000 -i 5000
+Execution time: 40.801666
+
+./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 5000
+Execution time: 1.815415
+
+seq/heat -t pat1_100x150.pgm -c gradient_100x150.pgm -m 100 -n 150 -e 0.01 -k 1000 -i 1000
+Execution time: 0.123432
+
+seq/heat -t pat1_100x150.pgm -c gradient_100x150.pgm -m 100 -n 150 -e 0.01 -k 1 -i 1000
+Execution time: 0.180167
+
