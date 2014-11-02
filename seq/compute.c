@@ -21,6 +21,12 @@
  *       
  */
 void do_compute(const struct parameters* p, struct results *r) {
+
+	struct timeval tv_eval_start, tv_eval_stop, tv_eval_diff;
+	double elapsed;
+	int ret = gettimeofday(&tv_eval_start, NULL);
+	if (ret == -1) die(strerror(errno));
+
 	double dirnmul = sqrt(2)/(sqrt(2) + 1);
 	double diagnmul = 1.0/(sqrt(2) + 1);
 
@@ -41,7 +47,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 	
 	// start timing
 	struct timeval tv_start, tv_curr, tv_diff;
-	int ret = gettimeofday(&tv_start, NULL);
+	ret = gettimeofday(&tv_start, NULL);
 	if (ret == -1) die(strerror(errno));
 	
 	r->maxdiff = DBL_MAX; // something comfortably over the threshold
@@ -120,6 +126,15 @@ void do_compute(const struct parameters* p, struct results *r) {
 				}
 			}
 		}
+
+		if(done || r->maxdiff < p->threshold) {
+			printf("Done\n");
+			ret = gettimeofday(&tv_eval_stop, NULL);
+			if (ret == -1) die(strerror(errno));
+			timersub(&tv_eval_stop, &tv_eval_start, &tv_eval_diff);
+			elapsed = tv_eval_diff.tv_sec + (tv_eval_diff.tv_usec / 1000000.0);
+		}
+
 		if (do_reduction) {
 			// get current time difference for the result report
 			ret = gettimeofday(&tv_curr, NULL);
@@ -154,7 +169,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 		else // done; reached maxiter or maxdiff is smaller than threshold
 			break;
 	}
-
+	printf("Execution time: %f\n", elapsed);
 	free(t_prev);
 	free(t_next);
 }
