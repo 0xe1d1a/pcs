@@ -114,7 +114,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 					// update the sum (not yet average)
 					r->tavg += result;
 					// update the maximum temprature difference if needed
-					double diff = abs(row[x] - *dst);
+					double diff = fabs(row[x] - *dst);
 					if (diff > r->maxdiff)
 						r->maxdiff = diff;
 				}
