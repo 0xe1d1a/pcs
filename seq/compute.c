@@ -128,7 +128,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 		}
 
 		if(done || r->maxdiff < p->threshold) {
-			printf("Done\n");
 			ret = gettimeofday(&tv_eval_stop, NULL);
 			if (ret == -1) die(strerror(errno));
 			timersub(&tv_eval_stop, &tv_eval_start, &tv_eval_diff);
