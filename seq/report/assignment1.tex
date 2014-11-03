@@ -12,9 +12,7 @@
 \usepackage{listings} % Required for insertion of code
 \usepackage{courier} % Required for the courier font
 \usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
-
 \usepackage{parskip}
-
 % Margins
 \topmargin=-0.45in
 \evensidemargin=0in
@@ -171,7 +169,7 @@ have a fixed temperature equal to the initial temprature value of these boundary
 
 \begin{homeworkProblem}[Solution Description]
 In our solution we use two matrices, \textbf{t\_prev} and \textbf{t\_next}, dynamically allocated and stored in pointers.
-The matrix \textbf{t\_prev} contains the temprature values from the previous iteration, initially the start temperatures.
+The matrix \textbf{t\_prev} contains the temperature values from the previous iteration, initially the start temperatures.
 In an iterative process, we compute a new value for every point, as depicted by Listing 1, and we store these values in \textbf{t\_next}.
 When all points have been (re)computed, we swap the pointers.
 
@@ -184,13 +182,13 @@ During the iterations, we gather information on the heat dissipation process.
 This information is computed periodically, depending on the user-provided configuration.
 Although this is not a parallelised solution, we describe this here as a reduction step, since
 the operations (finding minimum/maximum values and calculating the average) are ones which we
-will have to perform as a reduction.
+will have to perform as a reduction. \\
 In this step, we calculate (among other things) the maximum temperature difference.
 It is important that we do this reduction step periodically, in order to effectively stop iterating
-in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.
+in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.\\\\
 
 We currently perform the reduction step separately from the calculation, which avoids the branches appearing
-in the main loops.
+in the main loops.\\\\
 
 The wraparound (left/right) and boundaries (top/bottom) also add some complexity. Our initial approach for the
 wraparound (checking for the left/right sides explicitly in the inner loop) led to branches in the inner loop
@@ -198,28 +196,26 @@ causing performance problems, so we refactored the calculation code into an (inl
 for the first/last columns explicitly before/after the inner loop. We also attempted to use a modulo calculation,
 but this resulted in worse performance (and increasing the column size of the matrix so that we could do this
 with an AND operation instead seemed unnecessarily wasteful, so we didn't even try that).
-
+\\\\
 The top/bottom boundaries could be handled by allocating two extra rows in the matrices and copying the initial
 values into these rows, but instead we simply explicitly check for these cases in the outer loop and use
 pointers to the initial temperature values for the \texttt{rowup} or \texttt{rowdown} pointers as needed.
-
+\\\\
 We also tried precalculating all the direct/diagonal neighbour weights, so that we could simply multiply these
 with the sum of the relevant cell values (you can see this in the supplied code in the sections marked \texttt{PRECALC\_CND}),
 but this not only increased the RAM requirements dramatically, but also resulted in worse performance.
-
+\\\\
 Instead, we store the weight multipliers as constants in the source code, which resulted in a slight performance improvement,
 but this might not be justified in all circumstances given the reduction in clarity of the code.
-
+\\\\
 Our extensive use of pointer arithmetic/etc in the code could be argued to be worse for maintainability, and makes it more
-difficult to use e.g., C99-style multi-dimensional virtual arrays, but also makes it clearer what is happening in the resulting code.
-
+difficult to use e.g., C99-style multi-dimensional virtual arrays, but also makes it clearer what is happening in the resulting code. 
+\\\\
 Tweaking compiler flags appeared unproductive; the ancient gcc 4.4 on the DAS 4 head nodes doesn't support
 \texttt{-march=westmere}, but \texttt{-march=core2} didn't significantly help performance. Trying flags like
 \texttt{-O3} and \texttt{-funroll-loops} resulted in significantly worse performance. The lack of access to
 useful profiling tools on the DAS 4 nodes was also a problem. For future work it might be preferable to replicate
-the compilation environment elsewhere, but the lack of an OpenACC compiler makes this problematic, since the framework
-requires one be present.
-
+the compilation environment elsewhere, but the lack of an OpenACC compiler makes this problematic, since the framework requires one be present.
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
@@ -230,17 +226,36 @@ requires one be present.
 %\lipsum[2]
 For the evaluation of our code we run a set of experiments. Following are the outcome observations:
 \\\\
-From the following graph we can see that if we do the reduction step on every iteration the impact is performance drawback. But we see that if we report periodically even often the overhead is little and the convergence is computed as well.
+From the following graph we can see that if we do the reduction step on every iteration the impact is performance drawback. But we see that if we report periodically - even often - the overhead is little and the convergence is computed as well. This allows the exit condition to be tested more often without an important performance issue.
 \\\\
 \includegraphics[width=0.75\columnwidth]{kshow.png}
-%wrap with frame
-%\problemAnswer{
-%\begin{center}
-%\includegraphics[width=0.75\columnwidth]{example_figure} % Example image
-%\end{center}
+\\\\
+The following figure depicts wall time as opposed to element number. As expected the more elements, the more execution time in a linear relation. This experiment will serve for a latter comparison with parallelized implementation.
+\\\\
+\includegraphics[width=0.75\columnwidth]{walltime.png}
+\clearpage
+Moreover, we collected some results before and after the optimization:\\\\
+heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 20 \\
+Execution time before: 0.268016 \\
+Execution time after: 0.181496 \\
+\\\\
+heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 20 -i 20  \\
+Execution time before: 0.173204 \\
+Execution time after: 0.138695 \\
+\\\\
+heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 100000 -i 5000 \\
+Execution time before: 40.801666 \\
+Execution time after: 26.257804 \\
+\\
+We can see a big performance improvement from the optimization discussed in our solution.
+\\\\
+In this experiment we compared different widths and heights keeping the same amount of elements for us to see if the boundary affects the performance. %outcome here
+\\\\
+%graph here
+\\\\
+For our last experiment we made observations about FLOP/s. Generally the more FLOP/s the more efficient is the implementation since at the end there should be the same amount of floating point instructions that were executed.  %outcome here
+%graph here
 
-%\lipsum[3-5]
-%}
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
