@@ -10,14 +10,24 @@
 
 #define TRUE 1
 
+/* 
+ * double dirnmul = sqrt(2)/(sqrt(2) + 1) / 4.0;
+ * double diagnmul = 1.0/(sqrt(2) + 1) / 4.0;
+ *
+ * (going massively overboard on the precision just to be sure)
+ */
+const double dirnmul = 0.14644660940672626914249576657311990857124328613281;
+const double diagnmul = 0.10355339059327377249086765687025035731494426727295;
+
 #ifdef PRECALC_COND
 inline void do_calc(const double *cnd, const double *cnd_dir, const double *cnd_diagn, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
 #else
-inline void do_calc(const double *cnd, const double dirnmul, const double diagnmul, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
+inline void do_calc(const double *cnd, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
 #endif
 	double ourcnd = *cnd; // the point's conductivity
-	double directcnd = (1.0 - ourcnd) * dirnmul / 4.0; // direct neighbours weighted conductivity
-	double diagcnd = (1.0 - ourcnd) * diagnmul / 4.0; // diagonal neighbours weighted conductivity
+	double leftover = 1.0 - ourcnd;
+	double directcnd = leftover * dirnmul; // direct neighbours weighted conductivity
+	double diagcnd = leftover * diagnmul; // diagonal neighbours weighted conductivity
 
 	/* 
 	*  computation of the resulting temprature based on own conductivity 
@@ -57,9 +67,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	double elapsed;
 	int ret = gettimeofday(&tv_eval_start, NULL);
 	if (ret == -1) die(strerror(errno));
-
-	double dirnmul = sqrt(2)/(sqrt(2) + 1);
-	double diagnmul = 1.0/(sqrt(2) + 1);
 
 	// the point's conductivity
 	const double *cond = p->conductivity;
@@ -145,13 +152,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 #endif
 
 			// first column
-			do_calc(cnd_dst++, dirnmul, diagnmul, dst++, 0, p->M-1, 1, row, rowup, rowdown);
+			do_calc(cnd_dst++, dst++, 0, p->M-1, 1, row, rowup, rowdown);
 			// traverse the remaining columns in the row
 			for (size_t x = 1; x < p->M-1; ++x) {
-				do_calc(cnd_dst++, dirnmul, diagnmul, dst++, x, x-1, x+1, row, rowup, rowdown);
+				do_calc(cnd_dst++, dst++, x, x-1, x+1, row, rowup, rowdown);
 			}
 			// last column
-			do_calc(cnd_dst++, dirnmul, diagnmul, dst++, p->M-1, p->M-2, 0, row, rowup, rowdown);
+			do_calc(cnd_dst++, dst++, p->M-1, p->M-2, 0, row, rowup, rowdown);
 		}
 
 		dst = t_next;
