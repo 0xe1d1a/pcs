@@ -13,6 +13,8 @@
 \usepackage{courier} % Required for the courier font
 \usepackage{lipsum} % Used for inserting dummy 'Lorem ipsum' text into the template
 
+\usepackage{parskip}
+
 % Margins
 \topmargin=-0.45in
 \evensidemargin=0in
@@ -210,6 +212,13 @@ but this might not be justified in all circumstances given the reduction in clar
 
 Our extensive use of pointer arithmetic/etc in the code could be argued to be worse for maintainability, and makes it more
 difficult to use e.g., C99-style multi-dimensional virtual arrays, but also makes it clearer what is happening in the resulting code.
+
+Tweaking compiler flags appeared unproductive; the ancient gcc 4.4 on the DAS 4 head nodes doesn't support
+\texttt{-march=westmere}, but \texttt{-march=core2} didn't significantly help performance. Trying flags like
+\texttt{-O3} and \texttt{-funroll-loops} resulted in significantly worse performance. The lack of access to
+useful profiling tools on the DAS 4 nodes was also a problem. For future work it might be preferable to replicate
+the compilation environment elsewhere, but the lack of an OpenACC compiler makes this problematic, since the framework
+requires one be present.
 
 \end{homeworkProblem}
 
