@@ -4,10 +4,39 @@
 #include <string.h> // memcpy
 #include <float.h> // DBL
 #include <errno.h>
+#include <assert.h>
 #include "fail.h"
 #include "compute.h"
 
 #define TRUE 1
+
+#ifdef PRECALC_COND
+inline void do_calc(const double *cnd, const double *cnd_dir, const double *cnd_diagn, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
+#else
+inline void do_calc(const double *cnd, const double dirnmul, const double diagnmul, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
+#endif
+	double ourcnd = *cnd; // the point's conductivity
+	double directcnd = (1.0 - ourcnd) * dirnmul / 4.0; // direct neighbours weighted conductivity
+	double diagcnd = (1.0 - ourcnd) * diagnmul / 4.0; // diagonal neighbours weighted conductivity
+
+	/* 
+	*  computation of the resulting temprature based on own conductivity 
+	*  plus average weighted of direct neighbours plus average weighted of
+	*  diagonal neighbours. If this comment made you tired here take a break:
+	*  http://imgs.xkcd.com/comics/ballmer_peak.png
+	*/
+	double result = row[x] * ourcnd;
+
+	double directsum = rowup[x] + rowdown[x] + row[prev] + row[next];
+	result += directcnd * directsum;
+	double diagsum = rowup[prev] + rowup[next] + rowdown[prev] + rowdown[next];
+	result += diagcnd * diagsum;
+	/*
+	*  reflect the point temprature result on the t_next state;
+	*  this allows independent computations between the points
+	*/
+	*dst = result; 
+}
 
 /*
  * Function:  do_compute 
@@ -21,6 +50,8 @@
  *       
  */
 void do_compute(const struct parameters* p, struct results *r) {
+	// require the input not be completely crazy
+	assert(p->N >= 2 && p->M >= 2);
 
 	struct timeval tv_eval_start, tv_eval_stop, tv_eval_diff;
 	double elapsed;
@@ -30,7 +61,28 @@ void do_compute(const struct parameters* p, struct results *r) {
 	double dirnmul = sqrt(2)/(sqrt(2) + 1);
 	double diagnmul = 1.0/(sqrt(2) + 1);
 
+	// the point's conductivity
 	const double *cond = p->conductivity;
+
+#ifdef PRECALC_COND
+	// direct neighbours weighted conductivity
+	double *cond_direct = malloc(sizeof(double) * p->M * p->N);
+	if (cond_direct == 0) die("Out of memory");
+	// diagonal neighbours weighted conductivity
+	double *cond_diagn = malloc(sizeof(double) * p->M * p->N);
+	if (cond_diagn == 0) die("Out of memory");
+
+	// calculate the conductivity matrices for direct/diagonal neighbours
+	const double *cond_in = cond;
+	for (size_t y = 0; y < p->N; ++y) {
+		double *direct_dst = cond_direct + (y * p->M);
+		double *diagn_dst = cond_direct + (y * p->M);
+		for (size_t x = 0; x < p->M; ++x, cond_in++) {
+			*direct_dst++ = (1.0 - *cond_in) * dirnmul/4.0;
+			*diagn_dst++ = (1.0 - *cond_in) * diagnmul/4.0;
+		}
+	}
+#endif
 
 	// allocate two temperature matrices, copy the initial state into t_prev
 	double *t_prev, *t_next;
@@ -38,7 +90,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	if (t_prev == 0) die("Out of memory");
 	t_next = malloc(sizeof(double) * p->M * p->N);
 	if (t_next == 0) die("Out of memory");
-
 
 	memcpy(t_prev, p->tinit, sizeof(double) * p->M * p->N); //@Alyssa i'd like to discuss memory efficiency as posed to the forum
 
@@ -67,12 +118,17 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->tavg = 0.0; // we don't care about the fp inaccuracy, right?
 		}
 
+		// start at offset 0, proceed row-by-row (add 1 each time)
+		double *dst = t_next;
+		const double *cnd_dst = cond;
+#ifdef PRECALC_CND
+		const double *cnd_direct_dst = cond_direct;
+		const double *cnd_diagn_dst = cond_diagn;
+#endif
 
 		// N rows, M columns
-		double *dst = t_next;
 		// traverse rows
 		for (size_t y = 0; y < p->N; ++y) {
-			const double *cnd = &cond[p->M * y]; 
 
 			const double *row = &t_prev[p->M * y];
 			// boundary conditions (from the initial state)
@@ -82,35 +138,30 @@ void do_compute(const struct parameters* p, struct results *r) {
 			const double *rowdown = &t_prev[p->M * (y + 1)];
 			if (y == p->N-1)
 				rowdown = &p->tinit[p->M * (p->N-1)];
-			// traverse the row (columns)
-			for (size_t x = 0; x < p->M; ++x, dst++) {
-				// wraparound idiom
-				size_t prev = (x == 0 ? p->M-1 : x-1);
-				size_t next = (x == p->M-1 ? 0 : x+1);
 
-				double ourcnd = cnd[x]; // the point's conductivity
-				double directcnd = (1.0 - ourcnd) * dirnmul; // direct neighbours weighted conductivity
-				double diagcnd = (1.0 - ourcnd) * diagnmul; // diagonal neighbours weighted conductivity
+#ifdef PRECALC_COND
+			// NOTE: 2nd/3rd params are cnd_direct_dst++, cnd_diagn_dst++ for the precalculated cnd matrices variant
+			#error need to change stuff
+#endif
 
-				/* 
-				*  computation of the resulting temprature based on own conductivity 
-				*  plus average weighted of direct neighbours plus average weighted of
-				*  diagonal neighbours. If this comment made you tired here take a break:
-				*  http://imgs.xkcd.com/comics/ballmer_peak.png
-				*/
-				double result = row[x] * ourcnd;
+			// first column
+			do_calc(cnd_dst++, dirnmul, diagnmul, dst++, 0, p->M-1, 1, row, rowup, rowdown);
+			// traverse the remaining columns in the row
+			for (size_t x = 1; x < p->M-1; ++x) {
+				do_calc(cnd_dst++, dirnmul, diagnmul, dst++, x, x-1, x+1, row, rowup, rowdown);
+			}
+			// last column
+			do_calc(cnd_dst++, dirnmul, diagnmul, dst++, p->M-1, p->M-2, 0, row, rowup, rowdown);
+		}
 
-				double directsum = rowup[x] + rowdown[x] + row[prev] + row[next];
-				result += directcnd * directsum/4.0;
-				double diagsum = rowup[prev] + rowup[next] + rowdown[prev] + rowdown[next];
-				result += diagcnd * diagsum/4.0;
-				/*
-				*  reflect the point temprature result on the t_next state;
-				*  this allows independent computations between the points
-				*/
-				*dst = result; 
+		dst = t_next;
+		if (do_reduction) {
+			for (size_t y = 0; y < p->N; ++y) {
+				const double *row = &t_prev[p->M * y];
 
-				if (do_reduction) {
+				for (size_t x = 0; x < p->M; ++x, dst++) {
+					double result = *dst;
+
 					// update minimum temprature if needed
 					if (result < r->tmin)
 						r->tmin = result;
