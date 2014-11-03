@@ -10,14 +10,24 @@
 
 #define TRUE 1
 
+/* 
+ * double dirnmul = sqrt(2)/(sqrt(2) + 1) / 4.0;
+ * double diagnmul = 1.0/(sqrt(2) + 1) / 4.0;
+ *
+ * (going massively overboard on the precision just to be sure)
+ */
+const double dirnmul = 0.14644660940672626914249576657311990857124328613281;
+const double diagnmul = 0.10355339059327377249086765687025035731494426727295;
+
 #ifdef PRECALC_COND
 inline void do_calc(const double *cnd, const double *cnd_dir, const double *cnd_diagn, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
 #else
-inline void do_calc(const double *cnd, const double dirnmul, const double diagnmul, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
+inline void do_calc(const double *cnd, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
 #endif
 	double ourcnd = *cnd; // the point's conductivity
-	double directcnd = (1.0 - ourcnd) * dirnmul / 4.0; // direct neighbours weighted conductivity
-	double diagcnd = (1.0 - ourcnd) * diagnmul / 4.0; // diagonal neighbours weighted conductivity
+	double leftover = 1.0 - ourcnd;
+	double directcnd = leftover * dirnmul; // direct neighbours weighted conductivity
+	double diagcnd = leftover * diagnmul; // diagonal neighbours weighted conductivity
 
 	/* 
 	*  computation of the resulting temprature based on own conductivity 
@@ -53,14 +63,11 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// require the input not be completely crazy
 	assert(p->N >= 2 && p->M >= 2);
 
-	struct timeval tv_eval_start, tv_eval_stop, tv_eval_diff;
-	double elapsed;
-	int ret = gettimeofday(&tv_eval_start, NULL);
+	// start timing
+	struct timeval tv_start, tv_curr, tv_diff;
+	int ret = gettimeofday(&tv_start, NULL);
 	if (ret == -1) die(strerror(errno));
-
-	double dirnmul = sqrt(2)/(sqrt(2) + 1);
-	double diagnmul = 1.0/(sqrt(2) + 1);
-
+	
 	// the point's conductivity
 	const double *cond = p->conductivity;
 
@@ -96,11 +103,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// iteration count
 	size_t iter = 0;
 	
-	// start timing
-	struct timeval tv_start, tv_curr, tv_diff;
-	ret = gettimeofday(&tv_start, NULL);
-	if (ret == -1) die(strerror(errno));
-	
 	r->maxdiff = DBL_MAX; // something comfortably over the threshold
 
 	while (TRUE) { 
@@ -109,14 +111,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
 		do_reduction = done; // if we are done do a final reduction
 		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
-
-		if (do_reduction) {
-			r->niter = iter;
-			r->tmin = DBL_MAX;
-			r->tmax = DBL_MIN;
-			r->maxdiff = DBL_MIN;
-			r->tavg = 0.0; // we don't care about the fp inaccuracy, right?
-		}
 
 		// start at offset 0, proceed row-by-row (add 1 each time)
 		double *dst = t_next;
@@ -145,17 +139,23 @@ void do_compute(const struct parameters* p, struct results *r) {
 #endif
 
 			// first column
-			do_calc(cnd_dst++, dirnmul, diagnmul, dst++, 0, p->M-1, 1, row, rowup, rowdown);
+			do_calc(cnd_dst++, dst++, 0, p->M-1, 1, row, rowup, rowdown);
 			// traverse the remaining columns in the row
 			for (size_t x = 1; x < p->M-1; ++x) {
-				do_calc(cnd_dst++, dirnmul, diagnmul, dst++, x, x-1, x+1, row, rowup, rowdown);
+				do_calc(cnd_dst++, dst++, x, x-1, x+1, row, rowup, rowdown);
 			}
 			// last column
-			do_calc(cnd_dst++, dirnmul, diagnmul, dst++, p->M-1, p->M-2, 0, row, rowup, rowdown);
+			do_calc(cnd_dst++, dst++, p->M-1, p->M-2, 0, row, rowup, rowdown);
 		}
 
 		dst = t_next;
 		if (do_reduction) {
+			r->niter = iter;
+			r->tmin = DBL_MAX;
+			r->tmax = DBL_MIN;
+			r->maxdiff = DBL_MIN;
+			r->tavg = 0.0;
+
 			for (size_t y = 0; y < p->N; ++y) {
 				const double *row = &t_prev[p->M * y];
 
@@ -178,19 +178,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 			}
 		}
 
-		if(done || r->maxdiff < p->threshold) {
-			ret = gettimeofday(&tv_eval_stop, NULL);
-			if (ret == -1) die(strerror(errno));
-			timersub(&tv_eval_stop, &tv_eval_start, &tv_eval_diff);
-			elapsed = tv_eval_diff.tv_sec + (tv_eval_diff.tv_usec / 1000000.0);
-		}
-
 		if (do_reduction) {
 			// get current time difference for the result report
 			ret = gettimeofday(&tv_curr, NULL);
 			if (ret == -1) die(strerror(errno));
 			timersub(&tv_curr, &tv_start, &tv_diff);
 			r->time = tv_diff.tv_sec + (tv_diff.tv_usec / 1000000.0);
+
 			// compute average temprature for the result report 
 			r->tavg /= (p->N * p->M);
 			if (r->maxdiff < p->threshold) done = 1;
@@ -219,7 +213,9 @@ void do_compute(const struct parameters* p, struct results *r) {
 		else // done; reached maxiter or maxdiff is smaller than threshold
 			break;
 	}
-	printf("Execution time: %f\n", elapsed);
+
+	printf("Execution time: %f\n", r->time);
+
 	free(t_prev);
 	free(t_next);
 }
