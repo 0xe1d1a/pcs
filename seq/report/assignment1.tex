@@ -140,9 +140,13 @@
 %	Introduction
 %----------------------------------------------------------------------------------------
 \begin{homeworkProblem}[Introduction]
-For this assignment we are asked to implement a simulation of heat dissipation on the surface of a cylinder. The implementation is sequential and will serve as a base to the following assignments where we will provide a parallelized solution.
+For this assignment, we were asked to implement a simulation of heat dissipation on the surface of a cylinder.
+The implementation is sequential, and will serve as a basis for the following assignments where we will provide a parallelized solution.
 \\\\
-The surface is represented as a N x M matrix where each point is the temprature value. There is another same sized matrix where each point is the respective conductivity, where values are in the interval [0,1]. Depending on the conductivity of each point and its 8 surrounding neighbours, a new temprature is recomputed in an iterative manner. Specifically, the following formula describes the computations used for the simulation.
+The surface is represented as a N x M matrix, where each matrix element/cell represents the temperature value.
+There is another identicallly-sized matrix containing the per-cell conductivity, with values in the range [0,1].
+Depending on the conductivity of each point and its 8 surrounding neighbours, a new temperature is computed, in an iterative manner.
+Specifically, the following formula describes the computations used for the simulation:
 \\\\
 \(t' = c_t*t + (1-c_t) * \frac{\sqrt{2}}{\sqrt{2}+1} * \frac{1}{4} * \sum_{i=1}^{4} a_i 
     + (1-c_t) * \frac{1}{\sqrt{2}+1} * \frac{1}{4} * \sum_{j=1}^{4} b_j \) , where 
@@ -150,10 +154,12 @@ The surface is represented as a N x M matrix where each point is the temprature 
 \(t'\) is the new temprature value \\
 \(t\)  is the point's temprature value \\
 \(c_t\) is the point's respective conductivity \\
-\(a_i\) are the direct neighbour temprature values \\
-\(b_j\) are the diagonal neighbour temprature values
+\(a_i\) are the direct neighbour temperature values \\
+\(b_j\) are the diagonal neighbour temperature values
 \\\\
-The M columns of the matrix represent the cyclic dimension of the cylinder so that tha first and last column are neighbours whereas the other dimension has fixed boundary on the first and last row. The repsective neighbours of the boundary have a fixed temprature of the initial temprature value.
+The M columns of the matrix represent the cyclic dimension of the cylinder; note that the first and last columns are neighbours.
+The other dimension has a fixed boundary on the first and last rows; the neighbours of the boundary, not represented in our matrices,
+have a fixed temperature equal to the initial temprature value of these boundary cells.
 \end{homeworkProblem}
 %----------------------------------------------------------------------------------------
 %	Solution Description
@@ -162,16 +168,49 @@ The M columns of the matrix represent the cyclic dimension of the cylinder so th
 % To have just one problem per page, simply put a \clearpage after each problem
 
 \begin{homeworkProblem}[Solution Description]
-In our solution we use two matrices. \textbf{t\_prev} and \textbf{t\_next}. The matrix \textbf{t\_prev} first contains the initial temprature values. Then in an iterative process we compute for every point the new value as depicted by Listing 1 and store in \textbf{t\_next}. When all points have been recomputed, we perform a swap on the two matrices. The iterative process ends when the maximum temprature difference is less than a user provided threshold, or the number of iterations have reached a user provided number.
+In our solution we use two matrices, \textbf{t\_prev} and \textbf{t\_next}, dynamically allocated and stored in pointers.
+The matrix \textbf{t\_prev} contains the temprature values from the previous iteration, initially the start temperatures.
+In an iterative process, we compute a new value for every point, as depicted by Listing 1, and we store these values in \textbf{t\_next}.
+When all points have been (re)computed, we swap the pointers.
+
+The iterative process ends when the maximum temperature difference is less than a user-provided threshold,
+or the number of iterations have reached a user provided maximum.
+
 \csnippet{main_calculation}{Snippet of the main calculation}
-During the iterations we gather information on the heat dissipation process. This information is computed either every iteration or periodically depending on user input. We call this a reduction step. In the reduction step between other information we calculate the maximum temprature difference. It is important that we do a reduction step in order to effectively stop iterating in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.
-\\\\
-Our first approach: \\
-To deal with the boundary issue we do an explicit check whether we are on the first or last row and fetch the initial values directly from the input.\\
-Similarly for the wraparound of the cyclic dimension we do an explicit check whether we are on the first or last column and fetch the opposite's value.
-\\\\
-After the optimization: \\
-%@Alyssa append here
+
+During the iterations, we gather information on the heat dissipation process.
+This information is computed periodically, depending on the user-provided configuration.
+Although this is not a parallelised solution, we describe this here as a reduction step, since
+the operations (finding minimum/maximum values and calculating the average) are ones which we
+will have to perform as a reduction.
+In this step, we calculate (among other things) the maximum temperature difference.
+It is important that we do this reduction step periodically, in order to effectively stop iterating
+in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.
+
+We currently perform the reduction step separately from the calculation, which avoids the branches appearing
+in the main loops.
+
+The wraparound (left/right) and boundaries (top/bottom) also add some complexity. Our initial approach for the
+wraparound (checking for the left/right sides explicitly in the inner loop) led to branches in the inner loop
+causing performance problems, so we refactored the calculation code into an (inlined) function, and call it
+for the first/last columns explicitly before/after the inner loop. We also attempted to use a modulo calculation,
+but this resulted in worse performance (and increasing the column size of the matrix so that we could do this
+with an AND operation instead seemed unnecessarily wasteful, so we didn't even try that).
+
+The top/bottom boundaries could be handled by allocating two extra rows in the matrices and copying the initial
+values into these rows, but instead we simply explicitly check for these cases in the outer loop and use
+pointers to the initial temperature values for the \texttt{rowup} or \texttt{rowdown} pointers as needed.
+
+We also tried precalculating all the direct/diagonal neighbour weights, so that we could simply multiply these
+with the sum of the relevant cell values (you can see this in the supplied code in the sections marked \texttt{PRECALC\_CND}),
+but this not only increased the RAM requirements dramatically, but also resulted in worse performance.
+
+Instead, we store the weight multipliers as constants in the source code, which resulted in a slight performance improvement,
+but this might not be justified in all circumstances given the reduction in clarity of the code.
+
+Our extensive use of pointer arithmetic/etc in the code could be argued to be worse for maintainability, and makes it more
+difficult to use e.g., C99-style multi-dimensional virtual arrays, but also makes it clearer what is happening in the resulting code.
+
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
