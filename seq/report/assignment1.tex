@@ -273,6 +273,10 @@ Execution time: 27.313954 \\
 For our last experiment we made observations about FLOP/s. Generally the more FLOP/s the more efficient is the implementation since at the end there should be the same amount of floating point instructions that were executed.  %outcome here
 %graph here
 
+Note that the presented times are the time from the first call to main, up to and including the final
+run through the loop. You can exclude the final loop from the calculations when terminating due to
+exceeding the iteration count by adding an \texttt{if (!done)} before the assignment to \texttt{r->time}.
+
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
