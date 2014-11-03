@@ -91,14 +91,15 @@ void do_compute(const struct parameters* p, struct results *r) {
 	}
 #endif
 
-	// allocate two temperature matrices, copy the initial state into t_prev
+	// allocate two temperature matrices
 	double *t_prev, *t_next;
 	t_prev = malloc(sizeof(double) * p->M * p->N);
 	if (t_prev == 0) die("Out of memory");
 	t_next = malloc(sizeof(double) * p->M * p->N);
 	if (t_next == 0) die("Out of memory");
 
-	memcpy(t_prev, p->tinit, sizeof(double) * p->M * p->N); //@Alyssa i'd like to discuss memory efficiency as posed to the forum
+	// copy the initial state into t_prev
+	memcpy(t_prev, p->tinit, sizeof(double) * p->M * p->N);
 
 	// iteration count
 	size_t iter = 0;
@@ -115,6 +116,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 		// start at offset 0, proceed row-by-row (add 1 each time)
 		double *dst = t_next;
 		const double *cnd_dst = cond;
+
 #ifdef PRECALC_CND
 		const double *cnd_direct_dst = cond_direct;
 		const double *cnd_diagn_dst = cond_diagn;
