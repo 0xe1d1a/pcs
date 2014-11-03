@@ -63,11 +63,11 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// require the input not be completely crazy
 	assert(p->N >= 2 && p->M >= 2);
 
-	struct timeval tv_eval_start, tv_eval_stop, tv_eval_diff;
-	double elapsed;
-	int ret = gettimeofday(&tv_eval_start, NULL);
+	// start timing
+	struct timeval tv_start, tv_curr, tv_diff;
+	int ret = gettimeofday(&tv_start, NULL);
 	if (ret == -1) die(strerror(errno));
-
+	
 	// the point's conductivity
 	const double *cond = p->conductivity;
 
@@ -103,11 +103,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// iteration count
 	size_t iter = 0;
 	
-	// start timing
-	struct timeval tv_start, tv_curr, tv_diff;
-	ret = gettimeofday(&tv_start, NULL);
-	if (ret == -1) die(strerror(errno));
-	
 	r->maxdiff = DBL_MAX; // something comfortably over the threshold
 
 	while (TRUE) { 
@@ -116,14 +111,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
 		do_reduction = done; // if we are done do a final reduction
 		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
-
-		if (do_reduction) {
-			r->niter = iter;
-			r->tmin = DBL_MAX;
-			r->tmax = DBL_MIN;
-			r->maxdiff = DBL_MIN;
-			r->tavg = 0.0; // we don't care about the fp inaccuracy, right?
-		}
 
 		// start at offset 0, proceed row-by-row (add 1 each time)
 		double *dst = t_next;
@@ -163,6 +150,12 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 		dst = t_next;
 		if (do_reduction) {
+			r->niter = iter;
+			r->tmin = DBL_MAX;
+			r->tmax = DBL_MIN;
+			r->maxdiff = DBL_MIN;
+			r->tavg = 0.0;
+
 			for (size_t y = 0; y < p->N; ++y) {
 				const double *row = &t_prev[p->M * y];
 
@@ -185,19 +178,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 			}
 		}
 
-		if(done || r->maxdiff < p->threshold) {
-			ret = gettimeofday(&tv_eval_stop, NULL);
-			if (ret == -1) die(strerror(errno));
-			timersub(&tv_eval_stop, &tv_eval_start, &tv_eval_diff);
-			elapsed = tv_eval_diff.tv_sec + (tv_eval_diff.tv_usec / 1000000.0);
-		}
-
 		if (do_reduction) {
 			// get current time difference for the result report
 			ret = gettimeofday(&tv_curr, NULL);
 			if (ret == -1) die(strerror(errno));
 			timersub(&tv_curr, &tv_start, &tv_diff);
 			r->time = tv_diff.tv_sec + (tv_diff.tv_usec / 1000000.0);
+
 			// compute average temprature for the result report 
 			r->tavg /= (p->N * p->M);
 			if (r->maxdiff < p->threshold) done = 1;
@@ -226,7 +213,9 @@ void do_compute(const struct parameters* p, struct results *r) {
 		else // done; reached maxiter or maxdiff is smaller than threshold
 			break;
 	}
-	printf("Execution time: %f\n", elapsed);
+
+	printf("Execution time: %f\n", r->time);
+
 	free(t_prev);
 	free(t_next);
 }
