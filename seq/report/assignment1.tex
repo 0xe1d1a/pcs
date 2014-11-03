@@ -259,9 +259,16 @@ Execution time after: 26.257804 \\
 \\
 We can see a big performance improvement from the optimization discussed in our solution.
 \\\\
-In this experiment we compared different widths and heights keeping the same amount of elements for us to see if the boundary affects the performance. %outcome here
+In this experiment we compared different widths and heights keeping the same amount of elements for us to see if the boundary affects the performance. We can see that there is a difference between different dimensions. This is logical because we have optimized column traversal.
 \\\\
-%graph here
+heat -t areas\_100000x10.pgm -c pat2\_100000x10.pgm -m 10 -n 100000 -e 0.0 -k 5000 -i 5000 \\
+Execution time: 30.185160 \\
+\\\\
+heat -t areas_10x100000.pgm -c pat2_10x100000.pgm -m 100000 -n 10 -e 0.0 -k 5000 -i 5000 \\
+Execution time: 26.802325 \\
+\\\\
+heat -t areas_1000x1000.pgm -c pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 5000 -i 5000 \\
+Execution time: 27.313954 \\
 \\\\
 For our last experiment we made observations about FLOP/s. Generally the more FLOP/s the more efficient is the implementation since at the end there should be the same amount of floating point instructions that were executed.  %outcome here
 %graph here
