@@ -225,7 +225,7 @@ Tweaking compiler flags appeared unproductive; the ancient gcc 4.4 on the DAS 4 
 \texttt{-march=westmere}, but \texttt{-march=core2} didn't significantly help performance. Trying flags like
 \texttt{-O3} and \texttt{-funroll-loops} resulted in significantly worse performance. The lack of access to
 useful profiling tools on the DAS 4 nodes was also a problem. For future work it might be preferable to replicate
-the compilation environment elsewhere, but the lack of an OpenACC compiler makes this problematic, since the framework requires one be present.
+the compilation environment elsewhere, but the lack of an OpenACC compiler makes this problematic, since the framework requires one be present. We also didn't see any performance improvements from trying to use the \texttt{restrict} keyword.
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
