@@ -132,8 +132,8 @@
 
 %\setcounter{tocdepth}{1} % Uncomment this line if you don't want subsections listed in the ToC
 
-\newpage
-\tableofcontents
+%\newpage
+%\tableofcontents
 \newpage
 
 %----------------------------------------------------------------------------------------
@@ -234,51 +234,65 @@ the compilation environment elsewhere, but the lack of an OpenACC compiler makes
 
 \begin{homeworkProblem}[Evaluation]
 %\lipsum[2]
-For the evaluation of our code we run a set of experiments. Following are the outcome observations:
+For the evaluation of our code we run a set of experiments. Following are some observations of the outcomes.
+Since we have little interest (for our purposes) in the details of the problem (such as the termination
+condition, the min/max temperatures and the patterns), we primarily focused on investigating the input sizes.
+(Note that the presented times are the time from the first call to main, up to and including the final
+run through the loop. You can exclude the final loop from the calculations when terminating due to
+exceeding the iteration count by adding an \texttt{if (!done)} before the assignment to \texttt{r->time}.)
 \\\\
-From the following graph we can see that if we do the reduction step on every iteration the impact is performance drawback. But we see that if we report periodically - even often - the overhead is little and the convergence is computed as well. This allows the exit condition to be tested more often without an important performance issue.
+From the following graph, we can see that if we do the reduction step on every iteration, this has a significant impact on performance. But we can also see that if we report periodically -- even relatively often -- the overhead is relatively small, and this has the advantage that we can check for the convergence exit condition regularly.
 \\\\
 \includegraphics[width=0.75\columnwidth]{kshow.png}
 \\\\
-The following figure depicts wall time as opposed to element number. As expected the more elements, the more execution time in a linear relation. This experiment will serve for a latter comparison with parallelized implementation.
+The following figure depicts wall time against element number. As expected, the more elements, the more execution time, in an approximately linear relation. This experiment will hopefully serve well for a later comparison with parallelized implementations.
 \\\\
 \includegraphics[width=0.75\columnwidth]{walltime.png}
 \clearpage
 Moreover, we collected some results before and after the optimizations to remove the branches from the inner loop:\\\\
-heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 20 \\
-Execution time before: 0.268016 \\
-Execution time after: 0.181496 \\
-\\\\
-heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 20 -i 20  \\
-Execution time before: 0.173204 \\
-Execution time after: 0.138695 \\
-\\\\
-heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 100000 -i 5000 \\
-Execution time before: 40.801666 \\
-Execution time after: 26.257804 \\
-\\
+\begin{verbatim}
+heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 20
+Execution time before: 0.268016
+Execution time after: 0.181496
+
+heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 20 -i 20
+Execution time before: 0.173204
+Execution time after: 0.138695
+
+heat -t plasma\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 100000 -i 5000
+Execution time before: 40.801666
+Execution time after: 26.257804
+\end{verbatim}
+
 We can see a big performance improvement from the optimization discussed in our solution.
 \\\\
-In this experiment we compared different widths and heights keeping the same amount of elements for us to see if the boundary affects the performance. We can see that there is a difference between different dimensions. This is logical because we have optimized column traversal.
+After this experiment, we also compared different widths and heights -- keeping the same amount of elements -- to see if the code in the outer loop such as the boundary checks (or other problems, such as cache issues) affect the performance. We can see that there is a difference between different dimensions. This is logical because we have optimized column traversal.
 \\\\
-heat -t areas\_100000x10.pgm -c pat2\_100000x10.pgm -m 10 -n 100000 -e 0.0 -k 5000 -i 5000 \\
-Execution time: 30.185160 \\
-\\\\
-heat -t areas\_10x100000.pgm -c pat2\_10x100000.pgm -m 100000 -n 10 -e 0.0 -k 5000 -i 5000 \\
-Execution time: 26.802325 \\
-\\\\
-heat -t areas\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 5000 -i 5000 \\
-Execution time: 27.313954 \\
-\\\\
-For our last experiment we made observations about FLOP/s. Generally the more FLOP/s the more efficient is the implementation since at the end there should be the same amount of floating point instructions that were executed.  
-\\\\
+\begin{verbatim}
+heat -t areas\_100000x10.pgm -c pat2\_100000x10.pgm -m 10 -n 100000 -e 0.0 -k 5000 -i 5000
+Execution time: 30.185160
+
+heat -t areas\_10x100000.pgm -c pat2\_10x100000.pgm -m 100000 -n 10 -e 0.0 -k 5000 -i 5000
+Execution time: 26.802325
+
+heat -t areas\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 5000 -i 5000
+Execution time: 27.313954
+\end{verbatim}
+
+For our last experiment we made observations about FLOP/s. Generally, the more FLOP/s, the more efficient the implementation, since at the end of an experiment, the same amount of floating point instructions should have been executed.
+(Note that the FLOP/s figures presented are in billions, i.e. $10^6$.)
+
+\pagebreak
+We saw considerable variance, including some relatively extreme figures (although the difference shown for the lower number of elements
+is presumably due to the dataset fitting in cache), but also some amazingly(!) consistent figures for larger runs:
+
 \includegraphics[width=0.75\columnwidth]{flops.png}
-\\\\
+
+You can also see that, as you'd expect, compared to a square shape, a very small number of columns is considerably less `efficient',
+and a high number of columns is even better. As noted, we optimized the rows heavily -- this result shows that it might also
+be worthwhile to look into the outer loop and make sure the difference is not simply cache issues:
+
 \includegraphics[width=0.75\columnwidth]{flops2.png}
-\\\\
-Note that the presented times are the time from the first call to main, up to and including the final
-run through the loop. You can exclude the final loop from the calculations when terminating due to
-exceeding the iteration count by adding an \texttt{if (!done)} before the assignment to \texttt{r->time}.
 
 \end{homeworkProblem}
 
