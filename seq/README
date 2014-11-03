@@ -1,20 +1,28 @@
-Initial execution times (commit: d5216b26eaeb8f8bbce602550012abcfcad1fde7)
+First execution times (commit: d5216b26eaeb8f8bbce602550012abcfcad1fde7)
+Second execution times (commit: 498a810088a3bda6adbd2c9d499d2c376e0eb9dd)
 
 ./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 20 
 Execution time: 0.268016
+Execution time: 0.181496
 
 ./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 20 -i 20 
 Execution time: 0.173204
+Execution time: 0.138695
+
 
 ./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 100000 -i 5000
 Execution time: 40.801666
+Execution time: 26.257804
 
 ./heat -t /home/bakkerr/images/plasma_1000x1000.pgm -c /home/bakkerr/images/pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.1 -k 1 -i 5000
 Execution time: 1.815415
+Execution time: 1.174007
 
 seq/heat -t pat1_100x150.pgm -c gradient_100x150.pgm -m 100 -n 150 -e 0.01 -k 1000 -i 1000
 Execution time: 0.123432
+Execution time: 0.070234
 
 seq/heat -t pat1_100x150.pgm -c gradient_100x150.pgm -m 100 -n 150 -e 0.01 -k 1 -i 1000
 Execution time: 0.180167
+Execution time: 0.109249
 
