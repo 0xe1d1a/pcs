@@ -164,13 +164,14 @@ The M columns of the matrix represent the cyclic dimension of the cylinder so th
 \begin{homeworkProblem}[Solution Description]
 In our solution we use two matrices. \textbf{t\_prev} and \textbf{t\_next}. The matrix \textbf{t\_prev} first contains the initial temprature values. Then in an iterative process we compute for every point the new value as depicted by Listing 1 and store in \textbf{t\_next}. When all points have been recomputed, we perform a swap on the two matrices. The iterative process ends when the maximum temprature difference is less than a user provided threshold, or the number of iterations have reached a user provided number.
 \csnippet{main_calculation}{Snippet of the main calculation}
-During the iterations we gather information on the heat dissipation process. This information is computed either every iteration or periodically depending on user input. We call this a reduction step. In the reduction step between other information we calculate the maximum temprature difference. It is important that we do a reduction step in order to effectivly stop iterating in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.
+During the iterations we gather information on the heat dissipation process. This information is computed either every iteration or periodically depending on user input. We call this a reduction step. In the reduction step between other information we calculate the maximum temprature difference. It is important that we do a reduction step in order to effectively stop iterating in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.
 \\\\
+Our first approach: \\
 To deal with the boundary issue we do an explicit check whether we are on the first or last row and fetch the initial values directly from the input.\\
 Similarly for the wraparound of the cyclic dimension we do an explicit check whether we are on the first or last column and fetch the opposite's value.
-
-
-%\lipsum[1]
+\\\\
+After the optimization: \\
+%@Alyssa append here
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
@@ -179,7 +180,11 @@ Similarly for the wraparound of the cyclic dimension we do an explicit check whe
 
 \begin{homeworkProblem}[Evaluation]
 %\lipsum[2]
-Evaluation here
+For the evaluation of our code we run a set of experiments. Following are the outcome observations:
+\\\\
+From the following graph we can see that if we do the reduction step on every iteration the impact is performance drawback. But we see that if we report periodically even often the overhead is little and the convergence is computed as well.
+\\\\
+\includegraphics[width=0.75\columnwidth]{kshow.png}
 %wrap with frame
 %\problemAnswer{
 %\begin{center}
