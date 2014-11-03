@@ -176,6 +176,10 @@ When all points have been (re)computed, we swap the pointers.
 The iterative process ends when the maximum temperature difference is less than a user-provided threshold,
 or the number of iterations have reached a user provided maximum.
 
+These matrices allocated as one large block (for efficiency) and are stored in row-major order; we iterate over them
+row-by-row, since the input is stored in this way, and going column-by-column would lead to a large number of cache
+lines being required and a reduction in performance due to this.
+
 \csnippet{main_calculation}{Snippet of the main calculation}
 
 During the iterations, we gather information on the heat dissipation process.
@@ -185,29 +189,35 @@ the operations (finding minimum/maximum values and calculating the average) are 
 will have to perform as a reduction. \\
 In this step, we calculate (among other things) the maximum temperature difference.
 It is important that we do this reduction step periodically, in order to effectively stop iterating
-in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.\\\\
-
+in the case the difference is less than the threshold, but the reduction step also causes unnecessary overhead.
+\\\\
 We currently perform the reduction step separately from the calculation, which avoids the branches appearing
-in the main loops.\\\\
-
+in the main loops.
+\\\\
 The wraparound (left/right) and boundaries (top/bottom) also add some complexity. Our initial approach for the
 wraparound (checking for the left/right sides explicitly in the inner loop) led to branches in the inner loop
 causing performance problems, so we refactored the calculation code into an (inlined) function, and call it
 for the first/last columns explicitly before/after the inner loop. We also attempted to use a modulo calculation,
 but this resulted in worse performance (and increasing the column size of the matrix so that we could do this
 with an AND operation instead seemed unnecessarily wasteful, so we didn't even try that).
-\\\\
+
+\csnippet{inner_loop}{Innermost loop handling first/last columns separately}
+
 The top/bottom boundaries could be handled by allocating two extra rows in the matrices and copying the initial
 values into these rows, but instead we simply explicitly check for these cases in the outer loop and use
 pointers to the initial temperature values for the \texttt{rowup} or \texttt{rowdown} pointers as needed.
-\\\\
+
+\csnippet{boundary_checks}{The explicit checks for the boundary rows.}
+
 We also tried precalculating all the direct/diagonal neighbour weights, so that we could simply multiply these
 with the sum of the relevant cell values (you can see this in the supplied code in the sections marked \texttt{PRECALC\_CND}),
 but this not only increased the RAM requirements dramatically, but also resulted in worse performance.
 \\\\
 Instead, we store the weight multipliers as constants in the source code, which resulted in a slight performance improvement,
 but this might not be justified in all circumstances given the reduction in clarity of the code.
-\\\\
+
+\csnippet{constants}{Weight multiplier constants}
+
 Our extensive use of pointer arithmetic/etc in the code could be argued to be worse for maintainability, and makes it more
 difficult to use e.g., C99-style multi-dimensional virtual arrays, but also makes it clearer what is happening in the resulting code. 
 \\\\
