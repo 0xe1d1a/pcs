@@ -264,15 +264,18 @@ In this experiment we compared different widths and heights keeping the same amo
 heat -t areas\_100000x10.pgm -c pat2\_100000x10.pgm -m 10 -n 100000 -e 0.0 -k 5000 -i 5000 \\
 Execution time: 30.185160 \\
 \\\\
-heat -t areas_10x100000.pgm -c pat2_10x100000.pgm -m 100000 -n 10 -e 0.0 -k 5000 -i 5000 \\
+heat -t areas\_10x100000.pgm -c pat2\_10x100000.pgm -m 100000 -n 10 -e 0.0 -k 5000 -i 5000 \\
 Execution time: 26.802325 \\
 \\\\
-heat -t areas_1000x1000.pgm -c pat2_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 5000 -i 5000 \\
+heat -t areas\_1000x1000.pgm -c pat2\_1000x1000.pgm -m 1000 -n 1000 -e 0.0 -k 5000 -i 5000 \\
 Execution time: 27.313954 \\
 \\\\
-For our last experiment we made observations about FLOP/s. Generally the more FLOP/s the more efficient is the implementation since at the end there should be the same amount of floating point instructions that were executed.  %outcome here
-%graph here
-
+For our last experiment we made observations about FLOP/s. Generally the more FLOP/s the more efficient is the implementation since at the end there should be the same amount of floating point instructions that were executed.  
+\\\\
+\includegraphics[width=0.75\columnwidth]{flops.png}
+\\\\
+\includegraphics[width=0.75\columnwidth]{flops2.png}
+\\\\
 Note that the presented times are the time from the first call to main, up to and including the final
 run through the loop. You can exclude the final loop from the calculations when terminating due to
 exceeding the iteration count by adding an \texttt{if (!done)} before the assignment to \texttt{r->time}.
