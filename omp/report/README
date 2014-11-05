@@ -1,0 +1,3 @@
+Reminders for the report
+
+1) Threads are spawning once in an inner loop and then go in to dock until new work is given
