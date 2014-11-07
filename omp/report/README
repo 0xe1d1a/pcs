@@ -1,3 +1,4 @@
 Reminders for the report
 
 1) Threads are spawning once in an inner loop and then go in to dock until new work is given
+2) Could plot each threads wall time with "omp_get_wtime" to see scheduling decision results
