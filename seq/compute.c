@@ -1,6 +1,7 @@
 #include <sys/time.h>
 #include <math.h>
 #include <stdlib.h>
+#include <stdio.h>
 #include <string.h> // memcpy
 #include <float.h> // DBL
 #include <errno.h>
@@ -183,6 +184,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 	}
 
 	printf("Execution time: %f\n", r->time);
+
+	// report stuff
+	FILE *fp;
+	fp = fopen("results.log", "a+");
+	fprintf(fp, "%f %.6e %d %d\n", r->time, 
+		(double)p->N * (double)p->M * (double)(r->niter * 12 + (double)r->niter / p->period) / r->time
+		,p->N, p->M);
 
 	free(t_prev);
 	free(t_next);
