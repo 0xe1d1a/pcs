@@ -19,11 +19,7 @@
 const double dirnmul = 0.14644660940672626914249576657311990857124328613281;
 const double diagnmul = 0.10355339059327377249086765687025035731494426727295;
 
-#ifdef PRECALC_COND
-inline void do_calc(const double *cnd, const double *cnd_dir, const double *cnd_diagn, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
-#else
-inline void do_calc(const double *cnd, double * restrict dst, size_t x, size_t prev, size_t next, const double *row, const double *rowup, const double *rowdown) {
-#endif
+inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x, size_t prev, size_t next, const double * restrict row, const double * restrict rowup, const double * restrict rowdown) {
 	double ourcnd = *cnd; // the point's conductivity
 	double leftover = 1.0 - ourcnd;
 	double directcnd = leftover * dirnmul; // direct neighbours weighted conductivity
@@ -71,26 +67,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// the point's conductivity
 	const double *cond = p->conductivity;
 
-#ifdef PRECALC_COND
-	// direct neighbours weighted conductivity
-	double *cond_direct = malloc(sizeof(double) * p->M * p->N);
-	if (cond_direct == 0) die("Out of memory");
-	// diagonal neighbours weighted conductivity
-	double *cond_diagn = malloc(sizeof(double) * p->M * p->N);
-	if (cond_diagn == 0) die("Out of memory");
-
-	// calculate the conductivity matrices for direct/diagonal neighbours
-	const double *cond_in = cond;
-	for (size_t y = 0; y < p->N; ++y) {
-		double *direct_dst = cond_direct + (y * p->M);
-		double *diagn_dst = cond_direct + (y * p->M);
-		for (size_t x = 0; x < p->M; ++x, cond_in++) {
-			*direct_dst++ = (1.0 - *cond_in) * dirnmul/4.0;
-			*diagn_dst++ = (1.0 - *cond_in) * diagnmul/4.0;
-		}
-	}
-#endif
-
 	// allocate two temperature matrices
 	double *t_prev, *t_next;
 	t_prev = malloc(sizeof(double) * p->M * p->N);
@@ -114,13 +90,8 @@ void do_compute(const struct parameters* p, struct results *r) {
 		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
 
 		// start at offset 0, proceed row-by-row (add 1 each time)
-		double *dst = t_next;
+		double * restrict dst = t_next;
 		const double *cnd_dst = cond;
-
-#ifdef PRECALC_CND
-		const double *cnd_direct_dst = cond_direct;
-		const double *cnd_diagn_dst = cond_diagn;
-#endif
 
 		// N rows, M columns
 		// traverse rows
@@ -134,11 +105,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 			const double *rowdown = &t_prev[p->M * (y + 1)];
 			if (y == p->N-1)
 				rowdown = &p->tinit[p->M * (p->N-1)];
-
-#ifdef PRECALC_COND
-			// NOTE: 2nd/3rd params are cnd_direct_dst++, cnd_diagn_dst++ for the precalculated cnd matrices variant
-			#error need to change stuff
-#endif
 
 			// first column
 			do_calc(cnd_dst++, dst++, 0, p->M-1, 1, row, rowup, rowdown);
@@ -159,7 +125,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->tavg = 0.0;
 
 			for (size_t y = 0; y < p->N; ++y) {
-				const double *row = &t_prev[p->M * y];
+				const double * restrict row = &t_prev[p->M * y];
 
 				for (size_t x = 0; x < p->M; ++x, dst++) {
 					double result = *dst;
