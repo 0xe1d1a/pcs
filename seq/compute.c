@@ -1,7 +1,7 @@
 #include <sys/time.h>
 #include <math.h>
 #include <stdlib.h>
-#include <stdio.h>
+#include <stdio.h> // printf
 #include <string.h> // memcpy
 #include <float.h> // DBL
 #include <errno.h>
@@ -20,8 +20,8 @@
 const double dirnmul = 0.14644660940672626914249576657311990857124328613281;
 const double diagnmul = 0.10355339059327377249086765687025035731494426727295;
 
-inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x, size_t prev, size_t next, const double * restrict row, const double * restrict rowup, const double * restrict rowdown) {
-	double ourcnd = *cnd; // the point's conductivity
+inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x, const double * restrict row, size_t width) {
+	double ourcnd = cnd[x]; // the point's conductivity
 	double leftover = 1.0 - ourcnd;
 	double directcnd = leftover * dirnmul; // direct neighbours weighted conductivity
 	double diagcnd = leftover * diagnmul; // diagonal neighbours weighted conductivity
@@ -34,15 +34,15 @@ inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x
 	*/
 	double result = row[x] * ourcnd;
 
-	double directsum = rowup[x] + rowdown[x] + row[prev] + row[next];
+	double directsum = row[x-width] + row[x+width] + row[x-1] + row[x+1];
 	result += directcnd * directsum;
-	double diagsum = rowup[prev] + rowup[next] + rowdown[prev] + rowdown[next];
+	double diagsum = row[x-1-width] + row[x+1-width] + row[x-1+width] + row[x+1+width];
 	result += diagcnd * diagsum;
 	/*
 	*  reflect the point temprature result on the t_next state;
 	*  this allows independent computations between the points
 	*/
-	*dst = result; 
+	dst[x] = result; 
 }
 
 /*
@@ -57,8 +57,8 @@ inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x
  *       
  */
 void do_compute(const struct parameters* p, struct results *r) {
-	// require the input not be completely crazy
-	assert(p->N >= 2 && p->M >= 2);
+	// require the input is 'nice'
+	assert((p->N % 2 == 0) && (p->M % 2 == 0));
 
 	// start timing
 	struct timeval tv_start, tv_curr, tv_diff;
@@ -66,23 +66,43 @@ void do_compute(const struct parameters* p, struct results *r) {
 	if (ret == -1) die(strerror(errno));
 	
 	// the point's conductivity
-	const double *cond = p->conductivity;
+	const double * restrict cond = p->conductivity;
 
-	// allocate two temperature matrices
+	//const size_t unaligned_width = p->M + 2; // including smearing columns at start/end
+	//const size_t width = unaligned_width + 2 - (unaligned_width % 2); // aligned to 16 bytes (two doubles)
+	const size_t width = p->M + 2;
+
+	// allocate two temperature matrices, with extra rows on both sides and at top/bottom (i.e. (N+2)x(M+2))
 	double *t_prev, *t_next;
-	t_prev = malloc(sizeof(double) * p->M * p->N);
+	t_prev = malloc(sizeof(double) * width * (p->N + 2));
 	if (t_prev == 0) die("Out of memory");
-	t_next = malloc(sizeof(double) * p->M * p->N);
+	t_next = malloc(sizeof(double) * width * (p->N + 2));
 	if (t_next == 0) die("Out of memory");
 
 	// copy the initial state into t_prev
-	memcpy(t_prev, p->tinit, sizeof(double) * p->M * p->N);
+	double *memtgt = t_prev;
+	memcpy(memtgt + 1, p->tinit, sizeof(double) * p->M); // dup first row
+	for (size_t y = 0; y < p->N; y++) {
+		memtgt = t_prev + (width * (y+1));
+		memcpy(memtgt + 1, p->tinit + (p->M * y), sizeof(double) * p->M); // dup normal row
+	}
+	memtgt = t_prev + (width * (p->N+1));
+	memcpy(memtgt + 1, p->tinit + (p->M * (p->N - 1)), sizeof(double) * p->M); // dup last row
+
+	// smear *all* rows (including initial ones)
+	for (size_t y = 0; y < p->N+2; y++) {
+		t_prev[width * y] = t_prev[(width * y) + p->M];
+		t_prev[(width * y) + p->M + 1] = t_prev[(width * y) + 1];
+	}
+
+	// copy constant rows into the second copy
+	memcpy(t_next, t_prev, sizeof(double) * width);
+	memcpy(t_next + (width * (p->N+1)), t_prev + (width * (p->N+1)), sizeof(double) * width);
+
 
 	// iteration count
 	size_t iter = 0;
 	
-	r->maxdiff = DBL_MAX; // something comfortably over the threshold
-
 	while (TRUE) { 
 		int done = 0;
 		int do_reduction = 0;
@@ -90,46 +110,40 @@ void do_compute(const struct parameters* p, struct results *r) {
 		do_reduction = done; // if we are done do a final reduction
 		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
 
-		// start at offset 0, proceed row-by-row (add 1 each time)
-		double * restrict dst = t_next;
-		const double *cnd_dst = cond;
-
 		// N rows, M columns
-		// traverse rows
-		for (size_t y = 0; y < p->N; ++y) {
+		// iterate over non-constant rows
+		for (size_t y = 1; y < p->N+1; ++y) {
 
-			const double *row = &t_prev[p->M * y];
-			// boundary conditions (from the initial state)
-			const double *rowup = &t_prev[p->M * (y - 1)];
-			if (y == 0)
-				rowup = &p->tinit[0];
-			const double *rowdown = &t_prev[p->M * (y + 1)];
-			if (y == p->N-1)
-				rowdown = &p->tinit[p->M * (p->N-1)];
+			double * restrict dst = &t_next[width*y];
+			const double * restrict cnd_dst = &cond[(y-1) * p->M] - 1;
 
-			// first column
-			do_calc(cnd_dst++, dst++, 0, p->M-1, 1, row, rowup, rowdown);
-			// traverse the remaining columns in the row
-			for (size_t x = 1; x < p->M-1; ++x) {
-				do_calc(cnd_dst++, dst++, x, x-1, x+1, row, rowup, rowdown);
+			const double * restrict row = &t_prev[width*y];
+
+			// traverse the non-smeared columns in the row
+			for (size_t x = 1; x < p->M+1; ++x) {
+				do_calc(cnd_dst, dst, x, row, width);
 			}
-			// last column
-			do_calc(cnd_dst++, dst++, p->M-1, p->M-2, 0, row, rowup, rowdown);
+
+			// smear into first/last columns
+			dst[0] = dst[p->M];
+			dst[p->M+1] = dst[1];
 		}
 
-		dst = t_next;
 		if (do_reduction) {
+			// reset results
 			r->niter = iter;
 			r->tmin = DBL_MAX;
 			r->tmax = DBL_MIN;
 			r->maxdiff = DBL_MIN;
 			r->tavg = 0.0;
 
-			for (size_t y = 0; y < p->N; ++y) {
-				const double * restrict row = &t_prev[p->M * y];
+			// iterate over non-constant rows
+			for (size_t y = 1; y < p->N+1; ++y) {
+				const double * restrict row = &t_prev[width * y];
+				const double * restrict dst = &t_next[width * y];
 
-				for (size_t x = 0; x < p->M; ++x, dst++) {
-					double result = *dst;
+				for (size_t x = 1; x < p->M+1; ++x) {
+					double result = dst[x];
 
 					// update minimum temprature if needed
 					if (result < r->tmin)
@@ -140,7 +154,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 					// update the sum (not yet average)
 					r->tavg += result;
 					// update the maximum temprature difference if needed
-					double diff = fabs(row[x] - *dst);
+					double diff = fabs(row[x] - result);
 					if (diff > r->maxdiff)
 						r->maxdiff = diff;
 				}
@@ -160,14 +174,14 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 			// report state for debugging reasons and create current state frame
 			if(p->printreports) {
-				begin_picture(iter, p->M, p->N, p->io_tmin, p->io_tmax);
+/*				begin_picture(iter, p->M, p->N, p->io_tmin, p->io_tmax);
 				double *tptr = t_prev;
 				for (size_t y = 0; y < p->N; ++y) {
 					for (size_t x = 0; x < p->M; ++x) {
 						draw_point(x, y, *tptr++);
 					}
 				}
-				end_picture();
+				end_picture();*/
 				report_results(p, r);
 			}
 		}
