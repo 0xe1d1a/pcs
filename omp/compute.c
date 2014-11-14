@@ -8,6 +8,7 @@
 #include <assert.h>
 #include "fail.h"
 #include "compute.h"
+#include "omp.h"
 
 #define TRUE 1
 
@@ -59,7 +60,7 @@ inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x
 void do_compute(const struct parameters* p, struct results *r) {
 	// require the input is 'nice'
 	assert((p->N % 2 == 0) && (p->M % 2 == 0));
-
+	omp_set_num_threads(p->nthreads);
 	// start timing
 	struct timeval tv_start, tv_curr, tv_diff;
 	int ret = gettimeofday(&tv_start, NULL);
@@ -209,9 +210,9 @@ void do_compute(const struct parameters* p, struct results *r) {
 	// report stuff
 	FILE *fp;
 	fp = fopen("results.log", "a+");
-	fprintf(fp, "%f %.6e %d %d\n", r->time, 
+	fprintf(fp, "%f %.6e %zu %zu %zu\n", r->time, 
 		(double)p->N * (double)p->M * (double)(r->niter * 12 + (double)r->niter / p->period) / r->time
-		,p->N, p->M);
+		,p->N, p->M, p->nthreads);
 
 	free(t_prev);
 	free(t_next);
