@@ -13,11 +13,10 @@ int debug = 0;
 
 void TopDownMerge(int *src, int begin, int middle, int end, int *dest) {
 	int i0 = begin;
-	int i1 = end;
+	int i1 = middle;
 	for (int j = begin; j < end; ++j) {
 		if (i0 < middle && (i1 >= end || src[i0] <= src[i1])) {
 			dest[j] = src[i0++];
-			i0++;
 		} else {
 			dest[j] = src[i1++];
 		}
