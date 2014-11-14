@@ -121,7 +121,30 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 			// traverse the non-smeared columns in the row
 			for (size_t x = 1; x < p->M+1; ++x) {
-				do_calc(cnd_dst, dst, x, row, width);
+			//	do_calc(cnd_dst, dst, x, row, width);
+			double ourcnd = cnd_dst[x]; // the point's conductivity
+	double leftover = 1.0 - ourcnd;
+	double directcnd = leftover * dirnmul; // direct neighbours weighted conductivity
+	double diagcnd = leftover * diagnmul; // diagonal neighbours weighted conductivity
+
+	/* 
+	*  computation of the resulting temprature based on own conductivity 
+	*  plus average weighted of direct neighbours plus average weighted of
+	*  diagonal neighbours. If this comment made you tired here take a break:
+	*  http://imgs.xkcd.com/comics/ballmer_peak.png
+	*/
+	double result = row[x] * ourcnd;
+
+	double directsum = row[x-width] + row[x+width] + row[x-1] + row[x+1];
+	result += directcnd * directsum;
+	double diagsum = row[x-1-width] + row[x+1-width] + row[x-1+width] + row[x+1+width];
+	result += diagcnd * diagsum;
+	/*
+	*  reflect the point temprature result on the t_next state;
+	*  this allows independent computations between the points
+	*/
+	dst[x] = result; 
+
 			}
 
 			// smear into first/last columns
