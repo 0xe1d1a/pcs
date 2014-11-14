@@ -11,9 +11,35 @@ typedef enum Ordering {ASCENDING, DESCENDING, RANDOM} Order;
 
 int debug = 0;
 
+void TopDownMerge(int *src, int begin, int middle, int end, int *dest) {
+	int i0 = begin;
+	int i1 = end;
+	for (int j = begin; j < end; ++j) {
+		if (i0 < middle && (i1 >= end || src[i0] <= src[i1])) {
+			dest[j] = src[i0++];
+			i0++;
+		} else {
+			dest[j] = src[i1++];
+		}
+	}
+}
+
+void TopDownSplitMerge(int *src, int begin, int end, int *dest) {
+	if (end - begin < 2)
+		return;
+
+	int middle = (end + begin)/2;
+	TopDownSplitMerge(src, begin, middle, dest);
+	TopDownSplitMerge(src, middle, end, dest);
+	TopDownMerge(src, begin, middle, end, dest);
+	memcpy(src + begin, dest + begin, sizeof(int) * (end - begin));
+}
+
 /* Sort vector v of l elements using mergesort */
 void msort(int *v, long l){
-
+	int *tmpbuf = malloc(l * sizeof(int));
+	TopDownSplitMerge(v, 0, l, tmpbuf);
+	free(tmpbuf);
 }
 
 void print_v(int *v, long l) {
