@@ -152,16 +152,17 @@
 
 % To have just one problem per page, simply put a \clearpage after each problem
 
-\begin{homeworkProblem}[Heat dissipation w/ OpenMP]
+\begin{homeworkProblem}[Heat dissipation | OpenMP]
 \textbf{Solution description}
 
-solution desc here
+We also parallelize the reduction step as shown in the snippet below.
+
+\csnippet{reduction}{Reduction using omp directive}
 
 \textbf{Evaluation - Experiments}
 
 We run our experiments on the DAS-4 system using a normal node which has 8 physical cores.
 
-\begin{center}
 \includegraphics[width=0.75\columnwidth]{effectivness.png}
 
 
@@ -176,8 +177,8 @@ on the 1000x1000 experiment also having a superlinear performance with a value o
 
 \includegraphics[width=0.75\columnwidth]{walltime.png}
 
-This figure depicts the basic execution times for different numbers of cores and input sizes. Our fastest execution is of course on the
-\"100x100\" image which is small enough for all of it to fit in a small cache. 
+This figure depicts the basic execution times for different numbers of cores and input sizes. Our fastest execution is ofcourse on the
+100x100 image which is small enough for all of it to fit in a small cache. 
 
 \includegraphics[width=0.75\columnwidth]{speedups.png} 
 
@@ -187,7 +188,16 @@ would be effectivly the same. We show this on the following two figures.
 \includegraphics[width=0.75\columnwidth]{effcmp.png} 
 
 \includegraphics[width=0.75\columnwidth]{wallcmp.png}
-\end{center}
+
+Finally without neglecting the reduction computation we provide some graphs on the experiments we did. Since our implementation also uses concurrency to compute the reduction step as shown below, the reduction computation causes some overhead as expected but on the other hand very little, especially when using more than one threads. This means that we still achieve superlinear performance as the speedup figure below depicts. Note that for the experiments we used the worst case scenario which is doing the reduction step at every iteration (-k 1).
+
+\includegraphics[width=0.75\columnwidth]{reducecmp.png} 
+
+\includegraphics[width=0.75\columnwidth]{reducecmpwt.png}
+
+\includegraphics[width=0.75\columnwidth]{speedupwrd.png} 
+
+Note that the 1000x1000* means these results include reduction computation. 
 
 \end{homeworkProblem}
 
