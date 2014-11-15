@@ -7,6 +7,57 @@ import pprint
 
 colors = ['b', 'g', 'r', 'c', 'm', 'y', 'k']
 
+
+def plot_speedups(data):
+    n_groups = len(data.keys())
+
+    fig, ax = plt.subplots()
+
+    index = np.arange(n_groups)
+    bar_width = 0.2
+
+    opacity = 0.4
+    error_config = {'ecolor': '0.3'}
+
+    col_based_values = []
+    col_based_errors = []
+    threads = None
+    i = 0
+    for key in data:
+        threads = sorted(data[key].keys())
+        values = []
+        errors = []
+        for thread in threads:
+            #print data[key][thread] 
+            l = data[key][thread]
+            values.append(l[0])
+        col_based_values.append(values)
+    for j in range (0, len(col_based_values[0])):
+        tmp_val = []
+        for i in range(0,n_groups): 
+            tmp_val.append(col_based_values[i][0]/col_based_values[i][j])
+            if threads[j] == '1':
+                lab = threads[j] + " thread"
+            else:
+                lab = threads[j] + " threads"
+        plt.bar(index + bar_width * j, tmp_val, bar_width,
+                         alpha=opacity,
+                         color=colors[j],
+                         #yerr=tmp_err,
+                         error_kw=error_config,
+                         label= lab)
+
+
+    plt.xlabel('Dimensions')
+    plt.ylabel('times faster')
+    plt.title('Speedup (T1/TN)')
+    plt.xticks(index + bar_width, data.keys())
+    plt.legend()
+
+    plt.tight_layout()
+    plt.grid()
+    plt.show()
+
 def plot_flops(data):
     n_groups = len(data.keys())
 
@@ -39,12 +90,18 @@ def plot_flops(data):
         for i in range(0,n_groups): 
             tmp_val.append(col_based_values[i][j])
             tmp_err.append(col_based_errors[i][j])
+            if threads[j] == '1':
+                lab = threads[j] + " thread"
+            elif threads[j] == 'seq':
+                lab = threads[j] + " version"
+            else:
+                lab = threads[j] + " threads"
         plt.bar(index + bar_width * j, tmp_val, bar_width,
                          alpha=opacity,
                          color=colors[j],
                          yerr=tmp_err,
                          error_kw=error_config,
-                         label="Thread num " + threads[j])
+                         label= lab)
 
 
     plt.xlabel('Dimensions')
@@ -89,12 +146,18 @@ def plot_times(data):
         for i in range(0,n_groups): 
             tmp_val.append(col_based_values[i][j])
             tmp_err.append(col_based_errors[i][j])
+            if threads[j] == '1':
+                lab = threads[j] + " thread"
+            elif threads[j] == 'seq':
+                lab = threads[j] + " version"
+            else:
+                lab = threads[j] + " threads"
         plt.bar(index + bar_width * j, tmp_val, bar_width,
                          alpha=opacity,
                          color=colors[j],
                          yerr=tmp_err,
                          error_kw=error_config,
-                         label="Thread num " + threads[j])
+                         label=lab)
 
 
     plt.xlabel('Dimensions')
@@ -108,11 +171,9 @@ def plot_times(data):
     plt.draw()
 
 ifile=''
-ofile=''
 dpath='.'
-num_iter = 5000
 samples = 10
-msg = "Usage: %s -i input (default results.log) -d directory (default .) -I iterations (default 5000) -s samples (default 10) \n" % sys.argv[0]
+msg = "Usage: %s -i input (default results.log) -d directory (default .)  -s samples (default 10) \n" % sys.argv[0]
 
 
 try:
@@ -124,19 +185,14 @@ except getopt.GetoptError as e:
 for o, a in myopts:
     if o == '-i':
         ifile = a
-    elif o == '-o':
-        ofile = a
     elif o == '-d':
     	dpath = a
-    elif o == '-I':
-    	num_iter = int(a)
     elif o == '-s':
         samples = int(a)
 
 if ifile == '':
 	ifile = 'results.log'
-# Display input and output file name passed as the args
-print ("Input file : %s Path: %s iterations: %d samples: %d" % (ifile,dpath,num_iter,int(samples)))
+
 
 f = open(dpath+'/'+ifile, "r")
 lines = f.readlines()
@@ -173,3 +229,4 @@ pprint.pprint(data)
 
 plot_times(data)
 plot_flops(data)
+plot_speedups(data)
