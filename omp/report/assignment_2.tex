@@ -140,7 +140,11 @@
 %	Introduction
 %----------------------------------------------------------------------------------------
 \begin{homeworkProblem}[Introduction]
-introduction here
+	For this assignment, we were asked to parallelize our previous heat dissipation implementation
+	using OpenMP directives. Moreover using the same framework we had to implement and parallel version
+	of the merge sort. Finally we were asked to implement a vector of vectors of different lengths and
+	experiment with the scheduling of OpenMP.
+
 \end{homeworkProblem}
 %----------------------------------------------------------------------------------------
 %	Heat
@@ -155,7 +159,35 @@ solution desc here
 
 \textbf{Evaluation - Experiments}
 
-experiments here
+We run our experiments on the DAS-4 system using a normal node which has 8 physical cores.
+
+\begin{center}
+\includegraphics[width=0.75\columnwidth]{effectivness.png}
+
+
+The figure above shows the effectivness of the parallelism. The experiments where made with the following parameters:
+
+\begin{verbatim}
+./heat -e 0.0 -i 2000 -k 2001
+\end{verbatim}
+
+Note that for the 5000x5000 we instead used -i 500 to normalize the graph a bit. Note that we achieve our biggest flops/s ratio
+on the 1000x1000 experiment also having a superlinear performance with a value of 1.800922e+10. 
+
+\includegraphics[width=0.75\columnwidth]{walltime.png}
+
+This figure depicts the basic execution times for different numbers of cores and input sizes. Our fastest execution is of course on the
+\"100x100\" image which is small enough for all of it to fit in a small cache. 
+
+\includegraphics[width=0.75\columnwidth]{speedups.png} 
+
+Here we show the speedups achieved by different core usage. Note that our basis execution is the multithreaded program for 1 thread. Interestingly enough the difference of the OpenMP implementation for 1 thread and our sequantial version is really small. So the speedups
+would be effectivly the same. We show this on the following two figures.
+
+\includegraphics[width=0.75\columnwidth]{effcmp.png} 
+
+\includegraphics[width=0.75\columnwidth]{wallcmp.png}
+\end{center}
 
 \end{homeworkProblem}
 
