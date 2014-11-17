@@ -87,9 +87,12 @@ int main(int argc, char **argv) {
 
   int c;
   int seed = 42;
-  long length = 1e4;
+  long length = 50;
+  long maxlength = 1e6;
+  long minlength = 1e5;
   Order order = ASCENDING;
-  int *vector;
+  int **vector;
+  int *vlengths;
   unsigned threadcount = -1;
 
   omp_set_nested(1);
@@ -115,7 +118,7 @@ int main(int argc, char **argv) {
       case 't':
         threadcount = atol(optarg);
         // doesn't do the right thing for nesting, we used OMP_THREAD_LIMIT instead
-        omp_set_num_threads(threadcount);
+//        omp_set_num_threads(threadcount);
         break;
       case 'g':
         debug = 1;
@@ -141,50 +144,57 @@ int main(int argc, char **argv) {
   /* Seed such that we can always reproduce the same random vector */
   srand(seed);
 
-  /* Allocate vector. */
-  vector = (int*)malloc(length*sizeof(int));
+  /* Allocate outer vector (and associated lengths). */
+  vector = (int**)malloc(length*sizeof(int*));
+  vlengths = (int *)malloc(length*sizeof(int));
   if(vector == NULL) {
     fprintf(stderr, "Malloc failed...\n");
     return -1;
   }
 
-  /* Fill vector. */
-  switch(order){
-    case ASCENDING:
-      for(long i = 0; i < length; i++) {
-        vector[i] = (int)i;
-      }
-      break;
-    case DESCENDING:
-      for(long i = 0; i < length; i++) {
-        vector[i] = (int)(length - i);
-      } 
-      break;
-    case RANDOM:
-      for(long i = 0; i < length; i++) {
-        vector[i] = rand();
-      }
-      break;
-  }
+  for (long j = 0; j < length; j++) {
+    /* Pick a random length. */
+    long vlength = rand() % (maxlength - minlength) + minlength;
+    vlengths[j] = vlength;
+    /* Allocate inner vector. */
+    vector[j] = (int*)malloc(vlength*sizeof(int));
 
-  if(debug) {
-    print_v(vector, length);
+    /* Fill vector. */
+    switch(order){
+      case ASCENDING:
+        for(long i = 0; i < vlength; i++) {
+          vector[j][i] = (int)i;
+        }
+        break;
+      case DESCENDING:
+        for(long i = 0; i < vlength; i++) {
+          vector[j][i] = (int)(vlength - i);
+        } 
+        break;
+      case RANDOM:
+        for(long i = 0; i < vlength; i++) {
+          vector[j][i] = rand();
+        }
+        break;
+    }
   }
 
   struct timeval tv_start, tv_curr, tv_diff;
   gettimeofday(&tv_start, NULL);
 
   /* Sort */
-  msort(vector, length);
+  #pragma omp parallel for schedule(dynamic, 1)
+// num_threads(2)
+  for (long j = 0; j < length; j++) {
+    if (debug)
+      fprintf(stderr, "sorting #%d (size %d)\n", j, vlengths[j]);
+    msort(vector[j], vlengths[j]);
+  }
 
   gettimeofday(&tv_curr, NULL);
   timersub(&tv_curr, &tv_start, &tv_diff);
   float time = tv_diff.tv_sec + (tv_diff.tv_usec / 1000000.0);
-  printf("%f %d %d %d\n", time, (int)length, (int)threadcount, (int)max_depth);
-
-  if(debug) {
-    print_v(vector, length);
-  }
+  printf("%f %d all-tasks\n", time, (int)threadcount);
 
   return 0;
 }

@@ -60,7 +60,7 @@ inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x
 void do_compute(const struct parameters* p, struct results *r) {
 	// require the input is 'nice'
 	assert((p->N % 2 == 0) && (p->M % 2 == 0));
-	omp_set_num_threads(p->nthreads);
+	//omp_set_num_threads(p->nthreads);
 	// start timing
 	struct timeval tv_start, tv_curr, tv_diff;
 	int ret = gettimeofday(&tv_start, NULL);
@@ -113,7 +113,15 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 		// N rows, M columns
 		// iterate over non-constant rows
-		#pragma omp parallel for
+		#pragma omp parallel for num_threads(2)
+		for (size_t t = 0; t < 2; ++t) {
+			size_t midway = (p->M+1)/2;
+			size_t start = 1;
+			if (t == 1) start = midway;
+			size_t end = midway;
+			if (t == 1) end = p->M+1;
+
+		//#pragma omp parallel for num_threads(2) firstprivate(start, end)
 		for (size_t y = 1; y < p->N+1; ++y) {
 
 			double * restrict dst = &t_next[width*y];
@@ -122,13 +130,25 @@ void do_compute(const struct parameters* p, struct results *r) {
 			const double * restrict row = &t_prev[width*y];
 
 			// traverse the non-smeared columns in the row
-			for (size_t x = 1; x < p->M+1; ++x) {
+			//#pragma omp parallel sections num_threads(2)
+			//{
+			//#pragma omp section
+			//for (size_t x = 1; x < midway; ++x) {
+			for (size_t x = start; x < end; ++x) {
 				do_calc(cnd_dst, dst, x, row, width);
 			}
+			//#pragma omp section
+			//for (size_t x = midway; x < p->M+1; ++x) {
+			//	do_calc(cnd_dst, dst, x, row, width);
+			//}
+			//}
 
 			// smear into first/last columns
-			dst[0] = dst[p->M];
-			dst[p->M+1] = dst[1];
+			if (t == 1)
+				dst[0] = dst[p->M];
+			else
+				dst[p->M+1] = dst[1];
+		}
 		}
 
 		if (do_reduction) {
