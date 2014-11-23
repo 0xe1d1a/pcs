@@ -64,6 +64,8 @@ void thread_work(const struct thread_params *tparams)
 	double *t_next = g_t_next;
 	const size_t width = g_width;
 
+	// N rows, M columns
+	// iterate over non-constant rows
 	for (size_t y = tparams->srow; y < tparams->erow; ++y) {
 
 		double * restrict dst = &t_next[width*y];
@@ -88,8 +90,8 @@ void *thread_main(struct thread_params *tparams)
 	{
 		thread_work(tparams);
 		pthread_barrier_wait(&barrier); // wait for computation
-		pthread_barrier_wait(&barrier); // wait for reduction
-		pthread_barrier_wait(&barrier); // wait for swap (TODO: needed?)
+		// TODO: reduction if needed
+		pthread_barrier_wait(&barrier); // wait for swap
 	}
 }
 
@@ -174,10 +176,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 		do_reduction = done; // if we are done do a final reduction
 		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
 
-		// N rows, M columns
-		// iterate over non-constant rows
-
-		//#pragma omp parallel for
+		// wait for this round of computation to be done
 		pthread_barrier_wait(&barrier);
 
 		if (do_reduction) {
@@ -218,6 +217,17 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->maxdiff = maxdiff;
 			r->tavg = tavg / (p->N * p->M);
 		}
+
+		if (!done) {
+			// swap the buffers 
+			double *t_temp;
+			t_temp = t_prev;
+			t_prev = t_next;
+			t_next = t_temp;
+			g_t_next = t_next;
+			g_t_prev = t_prev;
+		}
+
 		pthread_barrier_wait(&barrier);
 
 		if (do_reduction) {
@@ -244,18 +254,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 			}
 		}
 
-		if (!done) {
-			// swap the buffers 
-			double *t_temp;
-			t_temp = t_prev;
-			t_prev = t_next;
-			t_next = t_temp;
-			g_t_next = t_next;
-			g_t_prev = t_prev;
-			pthread_barrier_wait(&barrier);
-		}
-		else // done; reached maxiter or maxdiff is smaller than threshold
+		if (done) // done; reached maxiter or maxdiff is smaller than threshold
 			break;
+	}
+
+	for (int i=0; i<p->nthreads; i++)
+	{
+		pthread_cancel(threads[i]);
 	}
 
 	printf("Execution time: %f\n", r->time);
