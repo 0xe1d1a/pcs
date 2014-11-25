@@ -46,22 +46,28 @@ inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x
 	dst[x] = result; 
 }
 
-double *g_t_prev, *g_t_next;
 pthread_barrier_t barrier;
 const struct parameters *g_p;
 size_t g_width;
+volatile int g_do_reduction;
 
 struct thread_params {
 	size_t srow;
 	size_t erow;
+
+	// state
+	double *t_prev, *t_next;
+
+	// reduction output
+	double tmin, tmax, maxdiff, tavg;
 };
 
 void thread_work(const struct thread_params *tparams)
 {
 	const struct parameters *p = g_p;
 	const double * restrict cond = p->conductivity;
-	double *t_prev = g_t_prev;
-	double *t_next = g_t_next;
+	double *t_prev = tparams->t_prev;
+	double *t_next = tparams->t_next;
 	const size_t width = g_width;
 
 	// N rows, M columns
@@ -70,6 +76,8 @@ void thread_work(const struct thread_params *tparams)
 
 		double * restrict dst = &t_next[width*y];
 		const double * restrict cnd_dst = &cond[(y-1) * p->M] - 1;
+		//double * volatile dst = &t_next[width*y];
+		//const double * volatile cnd_dst = &cond[(y-1) * p->M] - 1;
 
 		const double * restrict row = &t_prev[width*y];
 
@@ -84,14 +92,63 @@ void thread_work(const struct thread_params *tparams)
 	}
 }
 
+void *thread_reduction_work(struct thread_params *tparams)
+{
+	const struct parameters *p = g_p;
+	double *t_prev = tparams->t_prev;
+	double *t_next = tparams->t_next;
+	const size_t width = g_width;
+
+	double tmin = DBL_MAX;
+	double tmax = DBL_MIN;
+	double maxdiff = DBL_MIN;
+	double tavg = 0.0;
+
+	for (size_t y = tparams->srow; y < tparams->erow; ++y) {
+		const double * restrict row = &t_prev[width * y];
+		const double * restrict dst = &t_next[width * y];
+
+		for (size_t x = 1; x < p->M+1; ++x) {
+			double result = dst[x];
+
+			// update minimum temprature if needed
+			if (result < tmin)
+				tmin = result;
+			// update maximum temprature if needed
+			if (result > tmax)
+				tmax = result;
+			// update the sum (not yet average)
+			tavg += result;
+			// update the maximum temprature difference if needed
+			double diff = fabs(row[x] - result);
+			if (diff > maxdiff)
+				maxdiff = diff;
+		}
+	}
+
+	tparams->tmin = tmin;
+	tparams->tmax = tmax;
+	tparams->maxdiff = maxdiff;
+	tparams->tavg = tavg;
+}
+
 void *thread_main(struct thread_params *tparams)
 {
+	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
 	while (1)
 	{
 		thread_work(tparams);
 		pthread_barrier_wait(&barrier); // wait for computation
-		// TODO: reduction if needed
-		pthread_barrier_wait(&barrier); // wait for swap
+		if (g_do_reduction) {
+			thread_reduction_work(tparams);
+			pthread_barrier_wait(&barrier);
+		}
+
+		// swap our local copy
+		double *tmp = tparams->t_prev;
+		tparams->t_prev = tparams->t_next;
+		tparams->t_next = tmp;
 	}
 }
 
@@ -128,8 +185,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	if (t_prev == 0) die("Out of memory");
 	t_next = malloc(sizeof(double) * width * (p->N + 2));
 	if (t_next == 0) die("Out of memory");
-	g_t_prev = t_prev;
-	g_t_next = t_next;
 
 	// copy the initial state into t_prev
 	double *memtgt = t_prev;
@@ -165,72 +220,47 @@ void do_compute(const struct parameters* p, struct results *r) {
 		params[i].erow = 1 + itersize*(i+1);
 		if (i == p->nthreads-1)
 			params[i].erow = p->N+1;
+		printf("thread %d from %d to %d\n", i, params[i].srow, params[i].erow);
+		params[i].t_prev = t_prev;
+		params[i].t_next = t_next;
 		pthread_create(&threads[i], NULL, &thread_main, &params[i]);
 	}
 		
 
 	while (TRUE) { 
 		int done = 0;
-		int do_reduction = 0;
+		g_do_reduction = 0;
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
-		do_reduction = done; // if we are done do a final reduction
-		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
+		g_do_reduction = done; // if we are done do a final reduction
+		if (iter % p->period == 0) g_do_reduction = 1; // do a midrun reduction 
 
 		// wait for this round of computation to be done
 		pthread_barrier_wait(&barrier);
 
-		if (do_reduction) {
+		if (g_do_reduction) {
 			// reset results
 			r->niter = iter;
 
-			double tmin = DBL_MAX;
-			double tmax = DBL_MIN;
-			double maxdiff = DBL_MIN;
-			double tavg = 0.0;
+			r->tmin = DBL_MAX;
+			r->tmax = DBL_MIN;
+			r->maxdiff = DBL_MIN;
+			r->tavg = 0.0;
 
-			// iterate over non-constant rows
-			// #pragma omp parallel for reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg)
-			for (size_t y = 1; y < p->N+1; ++y) {
-				const double * restrict row = &t_prev[width * y];
-				const double * restrict dst = &t_next[width * y];
+			pthread_barrier_wait(&barrier);
 
-				for (size_t x = 1; x < p->M+1; ++x) {
-					double result = dst[x];
-
-					// update minimum temprature if needed
-					if (result < tmin)
-						tmin = result;
-					// update maximum temprature if needed
-					if (result > tmax)
-						tmax = result;
-					// update the sum (not yet average)
-					tavg += result;
-					// update the maximum temprature difference if needed
-					double diff = fabs(row[x] - result);
-					if (diff > maxdiff)
-						maxdiff = diff;
-				}
+			for (int i=0; i<p->nthreads; i++) {
+				if (params[i].tmin < r->tmin)
+					r->tmin = params[i].tmin;
+				if (params[i].tmax > r->tmax)
+					r->tmax = params[i].tmax;
+				if (params[i].maxdiff > r->maxdiff)
+					r->maxdiff = params[i].maxdiff;
+				r->tavg += params[i].tavg;
 			}
-
-			r->tmin = tmin;
-			r->tmax = tmax;
-			r->maxdiff = maxdiff;
-			r->tavg = tavg / (p->N * p->M);
+			r->tavg = r->tavg / (p->N * p->M);
 		}
 
-		if (!done) {
-			// swap the buffers 
-			double *t_temp;
-			t_temp = t_prev;
-			t_prev = t_next;
-			t_next = t_temp;
-			g_t_next = t_next;
-			g_t_prev = t_prev;
-		}
-
-		pthread_barrier_wait(&barrier);
-
-		if (do_reduction) {
+		if (g_do_reduction) {
 			// get current time difference for the result report
 			ret = gettimeofday(&tv_curr, NULL);
 			if (ret == -1) die(strerror(errno));
@@ -261,6 +291,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 	for (int i=0; i<p->nthreads; i++)
 	{
 		pthread_cancel(threads[i]);
+		pthread_join(threads[i], NULL);
 	}
 
 	printf("Execution time: %f\n", r->time);
