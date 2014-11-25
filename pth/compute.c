@@ -138,6 +138,7 @@ void *thread_main(struct thread_params *tparams)
 
 	while (1)
 	{
+		pthread_barrier_wait(&barrier);
 		thread_work(tparams);
 		pthread_barrier_wait(&barrier); // wait for computation
 		if (g_do_reduction) {
@@ -228,6 +229,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 		
 
 	while (TRUE) { 
+		pthread_barrier_wait(&barrier);
 		int done = 0;
 		g_do_reduction = 0;
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
