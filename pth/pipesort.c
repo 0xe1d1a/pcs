@@ -75,6 +75,7 @@ void *comparator(void *p_buffer) {
 			continue;
 		}
 		if (s == -1 ) {
+			// END
 			if(have_successor == !TRUE) {
 				have_successor = TRUE;
 				init_bbuffer(&send_bbuffer, rec_bbuffer->size);
@@ -122,18 +123,19 @@ void *comparator(void *p_buffer) {
 	}
 }
 
-void pipesort(size_t length) {
+void pipesort(size_t length, size_t bufsize) {
 	bounded_buffer send_bbuffer;
-	init_bbuffer(&send_bbuffer, length);
+	init_bbuffer(&send_bbuffer, bufsize);
 
 	pthread_t next;
 	pthread_create(&next, NULL, comparator, (void*) &send_bbuffer);
 
-	printf("Generating %d numbers\n", length);
-	srand(time(NULL));
+	printf("Generating %d numbers (bufsize %d)\n", length, bufsize);
+	srand(5678);
 	int i;
 	for (i=0; i<length; i++) {
-		symbol s = rand() % 500;
+		//symbol s = rand() % 500;
+		symbol s = length-i;
 		printf("Number: %d\n", s);
 		sem_wait(&send_bbuffer.empty);
 		//pthread_mutex_lock(&send_bbuffer.mutex);
@@ -155,11 +157,11 @@ void pipesort(size_t length) {
 }
 
 int main(int argc, char **argv) {
-	if (argc != 2) {
+	if (argc != 3) {
 		printf("Invalid params\n");
 		return 1;
 	}
-	pipesort(atoi(argv[1]));
+	pipesort(atoi(argv[1]), atoi(argv[2]));
 	return 0;
 }
 
