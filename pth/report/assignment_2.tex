@@ -2,7 +2,9 @@
 %	PACKAGES AND OTHER DOCUMENT CONFIGURATIONS
 %----------------------------------------------------------------------------------------
 
-\documentclass{article}
+\documentclass[11pt,a4paper]{article}
+
+\usepackage[a4paper,margin=2cm]{geometry}
 
 \usepackage{fancyhdr} % Required for custom headers
 \usepackage{lastpage} % Required to determine the last page for the footer
@@ -15,13 +17,13 @@
 \usepackage{parskip}
 % Margins
 \topmargin=-0.45in
-\evensidemargin=0in
-\oddsidemargin=0in
-\textwidth=6.5in
-\textheight=9.0in
+%\evensidemargin=0in
+%\oddsidemargin=0in
+%\textwidth=6.5in
+%\textheight=9.0in
 \headsep=0.25in
 \definecolor{mygreen}{rgb}{0,0.51, 0}
-\linespread{1.1} % Line spacing
+%\linespread{1.1} % Line spacing
 
 % Set up the header and footer
 \pagestyle{fancy}
@@ -140,13 +142,18 @@
 %	Introduction
 %----------------------------------------------------------------------------------------
 \begin{homeworkProblem}[Introduction]
-	For this assignment, we were asked to parallelize our sequential heat dissipation implementation
-	using the pthread library. Moreover, we had to experiment with the concepts of mutual exclusion,
-	barriers, critical sections and semaphores. Specifically, we implemented a generic barrier which
+
+For this assignment, we were asked to complete four sub-assignments involving writing code using pthreads (or related
+lower-level concurrency functionality) and perform experiments involving them. The four sub-assignments we will discuss
+further are:
+
+\begin{itemize}
+\item Parallelizing our sequential/OpenMP heat dissipation implementation using the pthread library.
+\item Experimenting with the concepts of mutual exclusion, barriers, critical sections and semaphores. Specifically, we implemented a generic barrier which
 	uses either mutex locks combined with condition variables, sempahores or the built-in posix functions.
-	Also, we implemented a sorting algorithm which uses a pipeline of threads and bounded buffers. Lastly,
-	we implemented a best effort generic program that shows the differences between constructs such as STM 
-	and readers-writers locks. 
+\item Implementing a sorting algorithm which uses a pipeline of threads and bounded buffers.
+\item Implementing (somehow) a generic program that can be used to experiment with constructs such as STM (Software Transactional Memory) and readers-writer locks. 
+\end{itemize}
 
 \end{homeworkProblem}
 %----------------------------------------------------------------------------------------
@@ -158,27 +165,37 @@
 \begin{homeworkProblem}[Heat dissipation | pthreads]
 \textbf{Solution description}
 
-In order to achieve good performance, we implemented the solution by spawning threads only once, hence avoiding
-the overhead of thread creation. In order to do that, we create the threads before anything else is done and since
-we know the matrix sizes and as before the problem being embarrassingly parallelizable each thread gets assigned to a specific workspace. 
-A set of rows that is. 
+We took our OpenMP solution from the last assignment, and converted it to use pthreads.
+
+To avoid operating system overhead, similarly to OpenMP, we spawned threads only once (at startup). Since the
+problem is embarassingly parallelizable in a statically scheduled manner, we can assign each thread a specific
+section of rows (since we know the matrix sizes at startup), which it is responsible for dealing with for the
+entire runtime of the computation. This is presumably fairly similar to the way the OpenMP code works.
+
+We pass this information to the threads at startup in a struct, and they pass reduction data back.
 
 \csnippet{threadspwn}{Creation and work assignment of threads}
 
-Much similar in the manner that openmp works. Also, in order to have correct results we put a barrier
-between the actual computation and the reduction calculation thus separating the dependencies. This means a thread that has finished
-its workspace has to wait for the other threads to finish.
+The threads then repeatedly execute the heat dissipation computation work in a loop (performing the reduction
+also, if necessary), and pthread barriers are used as necessary to make the threads run in lockstep per-iteration.
+In our initial implementation (see the later discussion), we used one barrier to sync the start of the main loop
+(to work out whether we needed to perform reduction, for example), one barrier after the computation work and
+one barrier after the reduction (if performed).
 
 \csnippet{synch}{Barrier synchronization}
 
-The master thread is also waiting on a barrier for the computation and the
-reduction calculation in order to do the final reduction. So we sync the working threads and the master thread by using barriers. If we have reached the iteration count the threads simply stop calculation but when we have the value lower than the threshold given we kill all the threads in the barrier waiting for the next iteration in an asynchronous way. Additionally, every thread keeps it's own copy of the pointer to the current \"snapshot\" of the values. *@alyssa it's late and i can't remember why we did this, just remember complaining. guess i never really understood in the end :P* 
+Threads keep local copies of some state (such as the next/prev pointers) to simplify synchronisation problems,
+although the excessive use of barriers in this implementation makes this somewhat unnecessary.
+
+When we finish execution, we simply walk through and cancel all the threads, rather than tidying up after them
+nicely. This made the code simpler to write, and the negative consequences are irrelevant for the limited scope
+of this assignment.
 
 \textbf{Evaluation - Experiments}
 
-We run our experiments on the DAS-4 system using a normal node which has 8 physical cores.
-
-The figures below show the effectivness of the parallelism. The experiments where made with the following parameters:
+We run our experiments on the DAS-4 system, using normal nodes which has 8 physical cores.
+The results are extremely similar to those we obtained using OpenMP, so we only conducted a limited set of
+experiments, with the following parameters:
 
 \begin{verbatim}
 ./heat -e 0.0 -i 2000 -k 2001
@@ -194,8 +211,53 @@ The figures below show the effectivness of the parallelism. The experiments wher
 
 \includegraphics[width=0.75\columnwidth]{wt_seq_cmp.png}
 
+As you can see, the results for 8 threads are extremely suspicious. We concluded that the most
+likely explanation is due to the fact that we're 8 threads plus a master thread, and that since
+the master thread must wake up for all threads to pass the barrier, we are presumably encountering
+scheduling problems on the 8-core machines.
 
+\textbf{Tweaks and improvements}
 
+We made two major changes to the dissipation code after the above experiments:
+
+\begin{enumerate}
+
+\item Doing computation on the master thread: we only spawn $n-1$ threads (when
+asked to use $n$ threads), and do the remaining computation on the master thread.
+This improved the situation for 8 threads, but (as we will see) not enough.
+
+\item Removing two barriers: we reduced the number of barriers to one single barrier,
+by making threads maintain more state themselves (specifically the iteration count,
+which they can all check individually to see whether they should do reduction or stop
+iterating). This didn't lead to a substantial performance improvement.
+
+\end{enumerate}
+
+\textbf{Evaluation - Comparison with OpenMP}
+
+As you can see from the graphs below, as mentioned already, our final performance (except in the 8-thread case
+mentioned) is extremely similar to that of our previous OpenMP implementation, both without reductions
+(or rather, only with a single final reduction) and with reductions at every step. This is exactly what we
+expected, since the OpenMP overhead is fairly low, and we are (hopefully) doing most things in a similar
+way.
+
+\includegraphics[width=0.75\textwidth]{pth_vs_omp_effectivness_without_reductions.png}
+
+\includegraphics[width=0.75\textwidth]{pth_vs_omp_effectivness_with_reductions.png}
+
+\includegraphics[width=0.75\columnwidth]{pth_vs_omp_speedup_without_reductions.png}
+
+\includegraphics[width=0.75\columnwidth]{pth_vs_omp_speedup_with_reductions.png}
+
+\includegraphics[width=0.75\columnwidth]{pth_vs_omp_walltime_without_reductions.png}
+
+\includegraphics[width=0.75\columnwidth]{pth_vs_omp_walltime_with_reductions.png}
+
+\textbf{Unresearched questions}
+
+We did not explore potential improvements which could result from requesting different
+behaviour from pthreads, such as pinning threads to a certain core (affinity) nor tweaking
+behaviour like busywaiting.
 
 \end{homeworkProblem}
 
