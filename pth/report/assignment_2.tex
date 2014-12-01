@@ -176,6 +176,8 @@ We pass this information to the threads at startup in a struct, and they pass re
 
 \csnippet{threadspwn}{Creation and work assignment of threads}
 
+\csnippet{reductions}{Reductions performed on master thread}
+
 The threads then repeatedly execute the heat dissipation computation work in a loop (performing the reduction
 also, if necessary), and pthread barriers are used as necessary to make the threads run in lockstep per-iteration.
 In our initial implementation (see the later discussion), we used one barrier to sync the start of the main loop
@@ -272,7 +274,7 @@ solution desc here
 
 \textbf{Evaluation}
 
-experiments here
+\includegraphics[width=0.75\columnwidth]{barrier.png}
 
 \end{homeworkProblem}
 
