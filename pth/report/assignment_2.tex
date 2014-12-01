@@ -270,11 +270,35 @@ behaviour like busywaiting.
 \begin{homeworkProblem}[Barrier synchronisation]
 \textbf{Solution description}
 
-solution desc here
+Our solution uses a union with different barrier data types in it, to provide a unified interface for experimenting,
+allowing the user to select a barrier type with command-line parameters, and the exact same client-facing (this is super
+cool buzzword terminology meaning `interface') code can be used for all cases.
+
+We implemented several types of barriers, as requested:
+
+\begin{enumerate}
+\item Standard Posix barriers (\texttt{pthread\_barrier\_wait} etc).
+\item Mutex locks and condition variables (\texttt{pthread\_cond\_wait} etc), in the obvious manner.
+\item Semaphores. We first tried implementing this using two semaphores, one to block the threads, and
+the other to act as a mutex protecting a lock on a counter. The counter was incremented with each new
+waiting thread, and when it reached the appropriate value, it was reset to zero, and \texttt{sem\_post}
+would be called in a loop, releasing all the threads. However, this only works once; when used in a loop,
+it is possible for a thread to `rush ahead' and go through the barrier a second time, stealing the semaphore
+value intended for another thread and leading to a deadlock. Therefore, our final implementation uses two
+(entry and exit) barriers to avoid this problem. Also, our final code replaces the mutex lock with an atomic
+increment/decrement on the counter. The original mutex code is left inside \texttt{SEM\_USE\_MUTEX} for illustrative purposes.
+\end{enumerate}
 
 \textbf{Evaluation}
 
+The results of our experiments are shown below (note that we used overall runtimes, rather than per-iteration runtimes, because
+the latter seemed a rather crazy idea):
+
 \includegraphics[width=0.75\columnwidth]{barrier.png}
+
+As you can see from the error bars, as soon as the operating system scheduler gets involved (i.e., beyond the), the results fluctuate massively.
+This makes it difficult to draw accurate conclusions, however the mutex/CV implementation appears to be considerably more efficient than the
+standard Posix barriers, and the semaphores also appear competitive.
 
 \end{homeworkProblem}
 
@@ -285,22 +309,36 @@ solution desc here
 \begin{homeworkProblem}[Pipeline parallelism]
 \textbf{Solution description}
 
-The pipesort works as follows: The master thread creates a bounded buffer and spanws a thread associated with the buffer. After that
+The pipeline sort works as follows: The master thread creates a bounded buffer and spawns a thread associated with the buffer. After that
 it generates a sequence of numbers and pushes them one by one into the buffer, thus sending them to the thread. The thread's role is 
 to receive these numbers, keep the biggest value and do the same as the generator: create a new buffer plus a new thread and send the numbers
 it didn't store by pushing them into the new buffer. This is done in a recursive way until the end of sequence is signaled. This occurs
 by the generator sending a special symbol into the pipeline where every thread forwards it as well as its stored number to the successor. The last thread in the pipeline spawns a special thread that prints all the numbers. In the end another special symbol is forwarded which instructs the threads
-to join with each other and finally end the execution. For the synchronization of the pushing and pulling from the bounded buffers we used
-semaphores which are designed for this exact producer-consumer problem. Mutex locks aren't needed since for every buffer there is only a
-single producer and a single consumer thus they aren't racing for particular data. Semaphores on the other hand just track the availability
-of the recourses and if needed they signal blocked threads that are waiting to insert data in a full buffer or fetch data from an empty buffer.
+to join with each other and finally end the execution.
+
+For the synchronization of the pushing and pulling from the bounded buffers we used
+semaphores, which are ideal for this producer-consumer problem, as discussed in the slides from the lecture. Mutex locks aren't needed since for every buffer there is only a
+single producer and a single consumer thus they aren't racing for particular data. The semaphores simply track the availability
+of the resources (how much of the buffer is used), and if relevant, they will signal blocked threads that are waiting to insert data in a full buffer or
+fetch data from an empty buffer.
 
 \csnippet{sempushpull}{Semaphore handling on inserting or fetching a value}
 
 \textbf{Evaluation}
-The results are very not stable, but this is normal since a lot more threads are created than the physical cores available to handle them. This means that the scheduler plays an important role in the performance, and more importantly a role that we can't really control. In any case the following figure depicts the evaluation of the program.
+The results are very not stable for sorting lengths beyond a few numbers, but this is as-expected, since a lot more threads are created than the physical cores available to handle them. This means that the scheduler plays an important role in the performance, and more importantly a role that we can't really control. In any case, the following figure depicts the evaluation of the program for a reasonably representative number of elements:
 
 \includegraphics[width=0.75\columnwidth]{pipesort.png}
+
+As you can see, buffer lengths up to around 1000 represent clear performance improvements, but eventually the overhead of creating the buffers (in particular, the
+allocation) starts to outweigh the added advantage (unsurprisingly for the values far beyond the length of the input we are sorting, which won't be used). This is
+exactly as expected, since every comparator thread will send all symbols onto subsequent threads (either during the comparison phase or the output phase)
+and so when we have a buffer length which is less than the total length to be sorted, it is potentially possible for this work to be done without any context
+switches (even though the extremely erratic performance seems to suggest this is not actually happening).
+
+Rather than investigating this further, since obviously the huge number of threads involved means that the whole idea is fundamentally flawed,
+we tried instead using userspace/green threads (rather than pthreads) in the form of \texttt{libpth} (or rather, \texttt{pthsem}, which supports semaphores),
+but the performance was much worse (perhaps unsurprisingly, since the cost of the context switches is still present in userspace, and none of the other problems
+are resolved in any way).
 
 \end{homeworkProblem}
 
