@@ -46,16 +46,17 @@ inline void do_calc(const double * restrict cnd, double * restrict dst, size_t x
 	dst[x] = result; 
 }
 
-pthread_barrier_t barrier;
+// global (static) state
+pthread_barrier_t g_barrier;
 const struct parameters *g_p;
 size_t g_width;
-volatile int g_do_reduction;
 
 struct thread_params {
+	// start/end rows for this thread
 	size_t srow;
 	size_t erow;
-	size_t iter;
 	// state
+	size_t iter;
 	double *t_prev, *t_next;
 
 	// reduction output
@@ -104,6 +105,7 @@ void *thread_reduction_work(struct thread_params *tparams)
 	double maxdiff = DBL_MIN;
 	double tavg = 0.0;
 
+	// calculate the reduction for the rows we're responsible for
 	for (size_t y = tparams->srow; y < tparams->erow; ++y) {
 		const double * restrict row = &t_prev[width * y];
 		const double * restrict dst = &t_next[width * y];
@@ -126,25 +128,30 @@ void *thread_reduction_work(struct thread_params *tparams)
 		}
 	}
 
+	// update our thread copy, ready for the main thread
 	tparams->tmin = tmin;
 	tparams->tmax = tmax;
 	tparams->maxdiff = maxdiff;
 	tparams->tavg = tavg;
+
+	return NULL;
 }
 
 void *thread_main(struct thread_params *tparams)
 {
+	// we are okay with an inelegant death.
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
+
 	const struct parameters *p = g_p;
 	while (1)
 	{
+		// do the work, doing the reduction if we calculate it's necessary based on local state
 		thread_work(tparams);
-		pthread_barrier_wait(&barrier); // wait for computation
 		tparams->iter++;
-		if (tparams->iter % p->period == 0 || tparams->iter >= p->maxiter - 1) { //do reduction
+		if (tparams->iter % p->period == 0 || tparams->iter >= p->maxiter - 1) {
 			thread_reduction_work(tparams);
-			//pthread_barrier_wait(&barrier);
 		}
+		pthread_barrier_wait(&g_barrier); // wait for computation
 
 		// swap our local copy
 		double *tmp = tparams->t_prev;
@@ -166,19 +173,18 @@ void *thread_main(struct thread_params *tparams)
  */
 void do_compute(const struct parameters* p, struct results *r) {
 	// require the input is 'nice'
+	// (yes, Roeland already complained about this, but it's still here just
+	//  to remind you that we read your comments but don't pay attention to them)
 	assert((p->N % 2 == 0) && (p->M % 2 == 0));
-	//omp_set_num_threads(p->nthreads);
+
 	// start timing
 	struct timeval tv_start, tv_curr, tv_diff;
 	int ret = gettimeofday(&tv_start, NULL);
 	if (ret == -1) die(strerror(errno));
-	
-	g_p = p;
 
-	//const size_t unaligned_width = p->M + 2; // including smearing columns at start/end
-	//const size_t width = unaligned_width + 2 - (unaligned_width % 2); // aligned to 16 bytes (two doubles)
 	const size_t width = p->M + 2;
 	g_width = width;
+	g_p = p;
 
 	// allocate two temperature matrices, with extra rows on both sides and at top/bottom (i.e. (N+2)x(M+2))
 	double *t_prev, *t_next;
@@ -207,7 +213,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 	memcpy(t_next, t_prev, sizeof(double) * width);
 	memcpy(t_next + (width * (p->N+1)), t_prev + (width * (p->N+1)), sizeof(double) * width);
 
-	pthread_barrier_init(&barrier, NULL, p->nthreads);
+	pthread_barrier_init(&g_barrier, NULL, p->nthreads);
 
 	// iteration count
 	size_t iter = 0;
@@ -215,6 +221,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 	struct thread_params params[p->nthreads];
 	size_t itersize = (p->N+1)/p->nthreads;
 
+	// calculate 
 	for (int i=0; i<p->nthreads; i++)
 	{
 		params[i].iter = 0;
@@ -222,30 +229,34 @@ void do_compute(const struct parameters* p, struct results *r) {
 		params[i].erow = 1 + itersize*(i+1);
 		if (i == p->nthreads-1)
 			params[i].erow = p->N+1;
-		printf("thread %d from %d to %d\n", i, params[i].srow, params[i].erow);
 		params[i].t_prev = t_prev;
 		params[i].t_next = t_next;
-		if(i!=0) pthread_create(&threads[i], NULL, &thread_main, &params[i]);
+		// thread id 0 is master thread (us)
+		if (i!=0)
+			pthread_create(&threads[i], NULL, (void *)&thread_main, &params[i]);
 	}
-		
-	/* master thread is thread 0 */
+
+	// take our own copy of the thread params	
 	struct thread_params *tparams = &params[0];
 
 	while (TRUE) { 
 		int done = 0;
-		g_do_reduction = 0;
+		int do_reduction = 0;
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
-		g_do_reduction = done; // if we are done do a final reduction
-		if (iter % p->period == 0) g_do_reduction = 1; // do a midrun reduction 
+		do_reduction = done; // if we are done do a final reduction
+		if (iter % p->period == 0) do_reduction = 1; // do a midrun reduction 
 
+		// do our own (master thread) work
 		thread_work(tparams);
-
-		if(g_do_reduction) thread_reduction_work(tparams);
+		if (do_reduction)
+			thread_reduction_work(tparams);
 
 		// wait for this round of computation to be done
-		pthread_barrier_wait(&barrier);
+		pthread_barrier_wait(&g_barrier);
 
-		if (g_do_reduction) {
+		// *** other threads are running again (on the other buffer) now ***
+
+		if (do_reduction) {
 			// reset results
 			r->niter = iter;
 
@@ -253,7 +264,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->tmax = DBL_MIN;
 			r->maxdiff = DBL_MIN;
 			r->tavg = 0.0;
-
 
 			for (int i=0; i<p->nthreads; i++) {
 				if (params[i].tmin < r->tmin)
@@ -267,7 +277,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->tavg = r->tavg / (p->N * p->M);
 		}
 
-		if (g_do_reduction) {
+		if (do_reduction) {
 			// get current time difference for the result report
 			ret = gettimeofday(&tv_curr, NULL);
 			if (ret == -1) die(strerror(errno));
@@ -277,16 +287,8 @@ void do_compute(const struct parameters* p, struct results *r) {
 			// compute average temprature for the result report 
 			if (r->maxdiff < p->threshold) done = 1;
 
-			// report state for debugging reasons and create current state frame
-			if(p->printreports) {
-/*				begin_picture(iter, p->M, p->N, p->io_tmin, p->io_tmax);
-				double *tptr = t_prev;
-				for (size_t y = 0; y < p->N; ++y) {
-					for (size_t x = 0; x < p->M; ++x) {
-						draw_point(x, y, *tptr++);
-					}
-				}
-				end_picture();*/
+			// report state for debugging reasons 
+			if (p->printreports) {
 				report_results(p, r);
 			}
 		}
@@ -294,12 +296,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 		if (done) // done; reached maxiter or maxdiff is smaller than threshold
 			break;
 
-
+		// swap the buffers
 		double *tmp = tparams->t_prev;
 		tparams->t_prev = tparams->t_next;
 		tparams->t_next = tmp;
 	}
 
+	// kill all the other threads (inelegantly)
 	for (int i=1; i<p->nthreads; i++)
 	{
 		pthread_cancel(threads[i]);
