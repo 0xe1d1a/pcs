@@ -9,10 +9,14 @@
 #include <getopt.h>
 #include <semaphore.h>
 
+// (SEM_USE_MUTEX only for illustrative purposes, see report)
+
 struct semaphore_barrier {
 	sem_t in_sem;
 	sem_t out_sem;
-	//sem_t mutex_sem;
+#ifdef SEM_USE_MUTEX
+	sem_t mutex_sem;
+#endif
 	int count;
 	int counter;
 };
@@ -20,7 +24,9 @@ struct semaphore_barrier {
 int semaphore_barrier_init(struct semaphore_barrier *barrier, const pthread_barrierattr_t *attr, unsigned int count) {
 	sem_init(&barrier->in_sem, 0, 0);
 	sem_init(&barrier->out_sem, 0, 0);
-	//sem_init(&barrier->mutex_sem, 0, 1);
+#ifdef SEM_USE_MUTEX
+	sem_init(&barrier->mutex_sem, 0, 1);
+#endif
 	barrier->counter = count;
 	barrier->count = 0;
 
@@ -30,22 +36,30 @@ int semaphore_barrier_init(struct semaphore_barrier *barrier, const pthread_barr
 int semaphore_barrier_wait(struct semaphore_barrier *barrier) {
 	int newcount;
 
-	//sem_wait(&barrier->mutex_sem);
+#ifdef SEM_USE_MUTEX
+	sem_wait(&barrier->mutex_sem);
+#endif
 	newcount = __sync_fetch_and_add(&barrier->count, 1);
 	if (newcount+1 == barrier->counter) {
 		for (unsigned i = 0; i < barrier->counter; ++i)
 			sem_post(&barrier->in_sem);
 	}
-	//sem_post(&barrier->mutex_sem);
+#ifdef SEM_USE_MUTEX
+	sem_post(&barrier->mutex_sem);
+#endif
 	sem_wait(&barrier->in_sem);
 
-	//sem_wait(&barrier->mutex_sem);
+#ifdef SEM_USE_MUTEX
+	sem_wait(&barrier->mutex_sem);
+#endif
 	newcount = __sync_fetch_and_add(&barrier->count, -1);
 	if (newcount-1 == 0) {
 		for (unsigned i = 0; i < barrier->counter; ++i)
 			sem_post(&barrier->out_sem);
 	}
-	//sem_post(&barrier->mutex_sem);
+#ifdef SEM_USE_MUTEX
+	sem_post(&barrier->mutex_sem);
+#endif
 	sem_wait(&barrier->out_sem);
 
 	return 0;
@@ -141,11 +155,13 @@ int main(int argc, char **argv) {
 
 	funcs.barrier_init((void *)&data.barrier, NULL, nthreads);
 
+	// start all the threads
 	pthread_t threads[nthreads];
 	for (unsigned int i = 0; i < nthreads; ++i) {
 		pthread_create(&threads[i], NULL, (void *)&worker_func, &data);
 	}
 
+	// wait for all the threads to finish
 	for (unsigned int i = 0; i < nthreads; ++i) {
 		pthread_join(threads[i], NULL);
 	}
