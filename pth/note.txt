@@ -7,3 +7,7 @@ alyssa
 fill the report with a lot of text
 comments to the source code
 check STM weird things going on
+to mention: for assignment 3.2, we used overall run-times and not useless tiny
+  per-iteration run-times
+* add some code snippets to slides
+* add graphs to slides
