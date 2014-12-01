@@ -224,9 +224,11 @@ void do_compute(const struct parameters* p, struct results *r) {
 		printf("thread %d from %d to %d\n", i, params[i].srow, params[i].erow);
 		params[i].t_prev = t_prev;
 		params[i].t_next = t_next;
-		pthread_create(&threads[i], NULL, &thread_main, &params[i]);
+		if(i!=0) pthread_create(&threads[i], NULL, &thread_main, &params[i]);
 	}
 		
+	/* master thread is thread 0 */
+	struct thread_params *tparams = &params[0];
 
 	while (TRUE) { 
 		pthread_barrier_wait(&barrier);
@@ -235,6 +237,8 @@ void do_compute(const struct parameters* p, struct results *r) {
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
 		g_do_reduction = done; // if we are done do a final reduction
 		if (iter % p->period == 0) g_do_reduction = 1; // do a midrun reduction 
+
+		thread_work(tparams);
 
 		// wait for this round of computation to be done
 		pthread_barrier_wait(&barrier);
@@ -247,6 +251,8 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->tmax = DBL_MIN;
 			r->maxdiff = DBL_MIN;
 			r->tavg = 0.0;
+
+			thread_reduction_work(tparams);
 
 			pthread_barrier_wait(&barrier);
 
@@ -288,9 +294,14 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 		if (done) // done; reached maxiter or maxdiff is smaller than threshold
 			break;
+
+
+		double *tmp = tparams->t_prev;
+		tparams->t_prev = tparams->t_next;
+		tparams->t_next = tmp;
 	}
 
-	for (int i=0; i<p->nthreads; i++)
+	for (int i=1; i<p->nthreads; i++)
 	{
 		pthread_cancel(threads[i]);
 		pthread_join(threads[i], NULL);
