@@ -54,7 +54,7 @@ volatile int g_do_reduction;
 struct thread_params {
 	size_t srow;
 	size_t erow;
-
+	size_t iter;
 	// state
 	double *t_prev, *t_next;
 
@@ -135,15 +135,15 @@ void *thread_reduction_work(struct thread_params *tparams)
 void *thread_main(struct thread_params *tparams)
 {
 	pthread_setcanceltype(PTHREAD_CANCEL_ASYNCHRONOUS, NULL);
-
+	const struct parameters *p = g_p;
 	while (1)
 	{
-		pthread_barrier_wait(&barrier);
 		thread_work(tparams);
 		pthread_barrier_wait(&barrier); // wait for computation
-		if (g_do_reduction) {
+		tparams->iter++;
+		if (tparams->iter % p->period == 0 || tparams->iter >= p->maxiter - 1) { //do reduction
 			thread_reduction_work(tparams);
-			pthread_barrier_wait(&barrier);
+			//pthread_barrier_wait(&barrier);
 		}
 
 		// swap our local copy
@@ -207,7 +207,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 	memcpy(t_next, t_prev, sizeof(double) * width);
 	memcpy(t_next + (width * (p->N+1)), t_prev + (width * (p->N+1)), sizeof(double) * width);
 
-	pthread_barrier_init(&barrier, NULL, p->nthreads+1);
+	pthread_barrier_init(&barrier, NULL, p->nthreads);
 
 	// iteration count
 	size_t iter = 0;
@@ -217,6 +217,7 @@ void do_compute(const struct parameters* p, struct results *r) {
 
 	for (int i=0; i<p->nthreads; i++)
 	{
+		params[i].iter = 0;
 		params[i].srow = 1 + itersize*i;
 		params[i].erow = 1 + itersize*(i+1);
 		if (i == p->nthreads-1)
@@ -231,7 +232,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 	struct thread_params *tparams = &params[0];
 
 	while (TRUE) { 
-		pthread_barrier_wait(&barrier);
 		int done = 0;
 		g_do_reduction = 0;
 		if (iter++ >= p->maxiter - 1) done = 1; // do the final iteration and finish
@@ -239,6 +239,8 @@ void do_compute(const struct parameters* p, struct results *r) {
 		if (iter % p->period == 0) g_do_reduction = 1; // do a midrun reduction 
 
 		thread_work(tparams);
+
+		if(g_do_reduction) thread_reduction_work(tparams);
 
 		// wait for this round of computation to be done
 		pthread_barrier_wait(&barrier);
@@ -252,9 +254,6 @@ void do_compute(const struct parameters* p, struct results *r) {
 			r->maxdiff = DBL_MIN;
 			r->tavg = 0.0;
 
-			thread_reduction_work(tparams);
-
-			pthread_barrier_wait(&barrier);
 
 			for (int i=0; i<p->nthreads; i++) {
 				if (params[i].tmin < r->tmin)
@@ -319,3 +318,4 @@ void do_compute(const struct parameters* p, struct results *r) {
 	free(t_prev);
 	free(t_next);
 }
+
