@@ -1,0 +1,9 @@
+ilias
+barrier graph:for each thread num compare the three methods
+heat graph: comparison with omp on the 1000x1000
+locking: different read rations -r      using different methods - bar chart: for each method different ratios
+
+alyssa
+fill the report with a lot of text
+comments to the source code
+check STM weird things going on
