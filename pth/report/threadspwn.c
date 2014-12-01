@@ -11,5 +11,5 @@
 
 	while (TRUE) { 
 		pthread_barrier_wait(&barrier);
-		/* master thread operates here to control reductions */
+		/* master thread runs threads in lockstep and does reductions */
 	}
