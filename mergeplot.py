@@ -15,7 +15,7 @@ msg = "Usage: %s -i input (default mresults.log) -d directory (default .)  -s sa
 		file format: time {space} elements_num {space} threads {newline}" % sys.argv[0]
 
 def plot_lines(times, elements, err):
-
+	
 	for y in times:
 		X = elements[y]
 		Y = times[y]
@@ -25,11 +25,11 @@ def plot_lines(times, elements, err):
 		for i in range(len(Y)):
 			Zup.append(Y[i] + Z[i])
 			Zdn.append(Y[i] - Z[i])
-		pyplot.plot( X, Y, '-', marker='o' )
+		line = pyplot.plot( X, Y, '-', marker='o' )
 		#pyplot.plot (X, Zup, linestyle='None', marker='^')
 		#pyplot.plot (X, Zdn, linestyle='None', marker='v')
-		pyplot.title( 'Mergesort plot' )
-		pyplot.xlabel( 'elements' )
+		pyplot.title( 'Pipesort walltime (4000 elements)' )
+		pyplot.xlabel( 'buffer size (bytes)' )
 		pyplot.ylabel( 'time (seconds)' )
 	pyplot.show()
 
