@@ -14,8 +14,7 @@ typedef struct {
 	size_t size;
 	sem_t full, empty;
 	int buf_id;
-	//pthread_mutex_t mutex;
-} bounded_buffer;
+} bounded_buffer; //wrap-around data structure
 
 int thread_id = 0;
 
@@ -56,7 +55,7 @@ void *printer(void *p_buffer) {
 
 void *comparator(void *p_buffer) {
 	bounded_buffer *rec_bbuffer = (bounded_buffer*) p_buffer;
-	symbol myVal = 501;
+	symbol myVal = -3;
 	symbol s;
 	symbol tosend;	
 	pthread_t next;
@@ -65,17 +64,13 @@ void *comparator(void *p_buffer) {
 	int have_successor = !TRUE;	
 	while (TRUE) {
 		sem_wait(&rec_bbuffer->full);
-		//pthread_mutex_lock(&rec_bbuffer->mutex);
 		s = fetch(rec_bbuffer);
-		//pthread_mutex_unlock(&rec_bbuffer->mutex);
 		sem_post(&rec_bbuffer->empty);
-		if (myVal == 501) {
+		if (myVal == -3) {
 			myVal = s;
-			//printf("Thread: %u - My val is %d nothing to send\n", my_id, myVal);
 			continue;
 		}
-		if (s == -1 ) {
-			// END
+		if (s == -1 ) { //ending state
 			if(have_successor == !TRUE) {
 				have_successor = TRUE;
 				init_bbuffer(&send_bbuffer, rec_bbuffer->size);
@@ -94,13 +89,13 @@ void *comparator(void *p_buffer) {
 				sem_wait(&send_bbuffer.empty);
 				push(s, &send_bbuffer);
 				sem_post(&send_bbuffer.full);
-				if(s == -2) {
+				if(s == -2) { //kill state
 					pthread_join(next, NULL);
 					return NULL;
 				}
 			}
 		}
-		else {
+		else { //general state
 			if (myVal > s) {
 				tosend = s;
 			}
@@ -108,16 +103,13 @@ void *comparator(void *p_buffer) {
 				tosend = myVal;
 				myVal = s;
 			}
-			//printf("Thread: %u - My val is %d, to send is %d\n",my_id, myVal, tosend);
 			if(have_successor == !TRUE) {
 				have_successor = TRUE;
 				init_bbuffer(&send_bbuffer, rec_bbuffer->size);
 				pthread_create(&next, NULL, comparator, (void*) &send_bbuffer);
 			}
 			sem_wait(&send_bbuffer.empty);
-			//pthread_mutex_lock(&send_bbuffer.mutex);
 			push(tosend, &send_bbuffer);
-			//pthread_mutex_unlock(&send_bbuffer.mutex);
 			sem_post(&send_bbuffer.full);
 		}
 	}
@@ -134,16 +126,13 @@ void pipesort(size_t length, size_t bufsize) {
 	srand(5678);
 	int i;
 	for (i=0; i<length; i++) {
-		//symbol s = rand() % 500;
-		symbol s = length-i;
+		symbol s = rand() % 5000;
+		//symbol s = length-i;
 		printf("Number: %d\n", s);
 		sem_wait(&send_bbuffer.empty);
-		//pthread_mutex_lock(&send_bbuffer.mutex);
 		push(s, &send_bbuffer);
-		//pthread_mutex_unlock(&send_bbuffer.mutex);
 		sem_post(&send_bbuffer.full);
 	}
-	//sleep(1);
 	printf("Sending END symbol 1\n");
 	sem_wait(&send_bbuffer.empty);
 	push(-1, &send_bbuffer);
