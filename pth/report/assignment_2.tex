@@ -347,13 +347,13 @@ are resolved in any way).
 %----------------------------------------------------------------------------------------
 
 \begin{homeworkProblem}[Mutual exclusion concepts]
-\textbf{Solution description}
 
-solution desc here
+For our solution as metioned in the introduction we implemented a
+best effort generic program that can be used to experiment with different mutual exclusion constructs. We say best effort because the existence of each mutual exclusion concept is a proof that they are meant for different scenarios, hence a generic but also fair implementation was a daunting task.
 
-\textbf{Evaluation}
+The program basically spawns threads which do some seemingly important work to outsmart the compiler and kernel from parking them. After that, they do memory reads/writes and then they hit the synchonization method. As assigned the methods are semaphores, readers-writers lock, mutexes and STM.
 
-experiments here
+In order to experiment, various parameters can be provided to the program. Naturally the number of threads, the time (in cycles) to do work, the time to spend in the critical section, memory size, and a read/write ratio. Note that we use binary semaphores since the general use of them is best fitted in a producer-consumer problem, which would be have probably been unfair for the rest of the methods, to experiment on. 
 
 \end{homeworkProblem}
 
