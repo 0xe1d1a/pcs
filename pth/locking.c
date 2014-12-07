@@ -16,6 +16,7 @@ unsigned int write_proportion = 1;
 unsigned int mem_size = 8;
 char *mem_ptr = 0, *mem_ptr2 = 0;
 
+// more predictable cycle-time-casting loop
 __attribute__((transaction_safe)) int wait_in_barrier() {
 	volatile int t = 0;
 	for (unsigned i = 0; i < time_in_section; ++i) {
@@ -24,45 +25,56 @@ __attribute__((transaction_safe)) int wait_in_barrier() {
 	return t;
 }
 
+// mutex lock
 pthread_mutex_t mymutex = PTHREAD_MUTEX_INITIALIZER;
 int mutexlock_access(int write) {
 	pthread_mutex_lock(&mymutex);
+	if (write)
+		memcpy(mem_ptr2, mem_ptr, mem_size);
 	wait_in_barrier();
 	pthread_mutex_unlock(&mymutex);
 	return 0;
 }
 
+// semaphore-as-mutex lock
 sem_t mysem;
 int semaphore_access(int write) {
 	sem_wait(&mysem);
+	if (write)
+		memcpy(mem_ptr2, mem_ptr, mem_size);
 	wait_in_barrier();
 	sem_post(&mysem);
 	return 0;
 }
 
+// r/w lock
 pthread_rwlock_t myrwlock = PTHREAD_RWLOCK_INITIALIZER;
 int rwlock_access(int write) {
 	if (write)
 		pthread_rwlock_wrlock(&myrwlock);
 	else
 		pthread_rwlock_rdlock(&myrwlock);
+	if (write)
+		memcpy(mem_ptr2, mem_ptr, mem_size);
 	wait_in_barrier();
 	pthread_rwlock_unlock(&myrwlock);
 	return 0;
 }
 
+// stupid timewasting function which gcc doesn't inline for STM
 int countdown(int from) {
 	if (from == 0) return 0;
 	return countdown(from-1);
 }
 
+// STM barrier which copies some memory
 int stm_access(int write) {
 	int ret = 0;
 	__transaction_atomic {
 		if (write)
 			memcpy(mem_ptr2, mem_ptr, mem_size);
 		else if (*mem_ptr2) // force read
-			ret = countdown(500);
+			ret = countdown(5);
 		wait_in_barrier();
 	}
 	return ret;
@@ -70,6 +82,7 @@ int stm_access(int write) {
 
 int (*do_access)(int write) = &mutexlock_access;
 
+// same cycle-wasting method
 void do_work() {
 	volatile int t = 0;
 	for (unsigned i = 0; i < time_doing_work; ++i) {
