@@ -1,3 +1,8 @@
+/*
+ * This is partially based on Franz's updated reference implementation
+ * (as discussed in the lab and on the mailing list).
+ */
+
 #include <sys/time.h>
 #include <math.h>
 #include <stdlib.h>
@@ -20,8 +25,6 @@ static void do_draw(const struct parameters *p,
 
 void do_compute(const struct parameters* p, struct results *r)
 {
-	size_t i, j;
-
 	/* alias input parameters */
 	const double (*restrict tinit) = (const double *)p->tinit;
 	const double (*restrict cinit) = (const double *)p->conductivity;
@@ -35,40 +38,38 @@ void do_compute(const struct parameters* p, struct results *r)
 	/* allocate halo for conductivities */
 	double (*restrict c) = (double (*restrict)) malloc(h * w * sizeof(double));
 
-	struct timeval before;
-
 	static const double c_cdir = 0.25 * M_SQRT2 / (M_SQRT2 + 1.0);
 	static const double c_cdiag = 0.25 / (M_SQRT2 + 1.0);
 
 	/* set initial temperatures and conductivities */
-	for (i = 1; i < h - 1; ++i)
-		for (j = 1; j < w - 1; ++j) 
+	for (size_t y = 1; y < h - 1; ++y) {
+		for (size_t x = 1; x < w - 1; ++x) 
 		{
-			g1[(i) * w + j] = tinit[(i-1) * p->M + j-1];
-			c[(i) * w + j] = cinit[(i-1) * p->M + j-1];
+			g1[(y) * w + x] = tinit[(y-1) * p->M + x-1];
+			c[(y) * w + x] = cinit[(y-1) * p->M + x-1];
 		}
+	}
 	/* smear outermost columns to border */
-	for (j = 1; j < w-1; ++j) {
-		g1[(0) * w + j] = g2[(0) * w + j] = g1[(1) * w + j];
-		g1[(h-1) * w + j] = g2[(h-1) * w + j] = g1[(h-2) * w + j];
+	for (size_t x = 1; x < w-1; ++x) {
+		g1[(0) * w + x] = g2[(0) * w + x] = g1[(1) * w + x];
+		g1[(h-1) * w + x] = g2[(h-1) * w + x] = g1[(h-2) * w + x];
 	}
 	/* smear outermost rows to borders */
-	for (i = 0; i < h; ++i)
-	{
-		g1[(i) * w + w-1] = g2[(i) * w + w-1] = g1[(i) * w + 1];
-		g1[(i) * w + 0] = g2[(i) * w + 0] = g1[(i) * w + w-2];
+	for (size_t y = 0; y < h; ++y) {
+		g1[(y) * w + w-1] = g2[(y) * w + w-1] = g1[(y) * w + 1];
+		g1[(y) * w + 0] = g2[(y) * w + 0] = g1[(y) * w + w-2];
 	}
 
 	/* compute */
-	size_t iter;
 	double (*restrict src) = g2;
 	double (*restrict dst) = g1;
 
+	struct timeval before;
 	gettimeofday(&before, NULL);
 
 	// need to copy in both dst (which becomes src) and src (because it has the constant smearing)
 	#pragma acc enter data copyin(c[0:w*h], dst[0:w*h], src[0:w*h])
-	for (iter = 1; iter <= p->maxiter; ++iter)
+	for (size_t iter = 1; iter <= p->maxiter; ++iter)
 	{
 #ifdef GEN_PICTURES
 		const unsigned drawrate = 10;
@@ -78,31 +79,31 @@ void do_compute(const struct parameters* p, struct results *r)
 #endif
 
 		/* swap source and destination */
-		{ void *tmp = src; src = dst; dst = tmp; }
+		{ double *tmp = src; src = dst; dst = tmp; }
 
 		/* compute */
 		#pragma acc parallel loop gang num_gangs(h-2) num_workers(4) vector_length(24) independent present(c[0:w*h], dst[0:w*h], src[0:w*h])
-		for (i = 1; i < h - 1; ++i)
+		for (size_t y = 1; y < h - 1; ++y)
 		{
 			#pragma acc loop worker independent
-			for (j = 1; j < w - 1; ++j)
+			for (size_t x = 1; x < w - 1; ++x)
 			{
-				double w_local = c[(i) * w + j];
+				double w_local = c[(y) * w + x];
 				double restw = 1.0 - w_local;
 
-				dst[(i) * w + j] = w_local * src[(i) * w + j] + 
+				dst[(y) * w + x] = w_local * src[(y) * w + x] + 
 
-					(src[(i+1) * w + j  ] + src[(i-1) * w + j  ] + 
-					 src[(i  ) * w + j+1] + src[(i  ) * w + j-1]) * (restw * c_cdir) +
+					(src[(y+1) * w + x  ] + src[(y-1) * w + x  ] + 
+					 src[(y  ) * w + x+1] + src[(y  ) * w + x-1]) * (restw * c_cdir) +
 
-					(src[(i-1) * w + j-1] + src[(i-1) * w + j+1] + 
-					 src[(i+1) * w + j-1] + src[(i+1) * w + j+1]) * (restw * c_cdiag);
+					(src[(y-1) * w + x-1] + src[(y-1) * w + x+1] + 
+					 src[(y+1) * w + x-1] + src[(y+1) * w + x+1]) * (restw * c_cdiag);
 
 			}
 
 			/* copy left and right column to opposite border */
-			dst[(i) * w + w-1] = dst[(i) * w + 1];
-			dst[(i) * w + 0] = dst[(i) * w + w-2];
+			dst[(y) * w + w-1] = dst[(y) * w + 1];
+			dst[(y) * w + 0] = dst[(y) * w + w-2];
 		}
 
 		/* conditional reporting */
@@ -118,10 +119,10 @@ void do_compute(const struct parameters* p, struct results *r)
 			double tavg = 0.0;
 
 			// iterate over non-constant rows
-			#pragma acc parallel loop gang num_gangs(h-2) num_workers(4) vector_length(24) reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg) present(dst[0:w*h], src[0:w*h])
-			for (size_t y = 1; y < w - 1; ++y) {
+			#pragma acc parallel loop gang num_gangs(w-2) num_workers(4) vector_length(24) reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg) present(dst[0:w*h], src[0:w*h])
+			for (size_t x = 1; x < w - 1; ++x) {
 				#pragma acc loop worker independent
-				for (size_t x = 1; x < h - 1; ++x) {
+				for (size_t y = 1; y < h - 1; ++y) {
 					double result = dst[w*y + x];
 
 					// update minimum temprature if needed
