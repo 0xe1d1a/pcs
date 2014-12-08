@@ -180,6 +180,9 @@ And we also parallelized the reduction step, using OpenACC's directive:
 
 \csnippet{reduction}{Reduction using acc directive}
 
+The use of the \texttt{independent} directive on the pragmas informs PGI that the loops do not
+have data dependencies on each other.
+
 (We also included OpenMP directives, but the resulting code is slower than our original OpenMP
 code, so we didn't use it.)
 
@@ -192,13 +195,11 @@ difficult to experiment with them.
 
 \includegraphics[width=0.75\columnwidth]{effectivness.png}
 
-The figure above shows the effectivness of the parallelisation. The experiments were made with the following parameters:
+The figure above shows the effectiveness of the parallelisation. The experiments were made with the following parameters:
 
 \begin{verbatim}
 ./heat -e 0.0 -i 2000 -k 2001
 \end{verbatim}
-
-\includegraphics[width=0.75\columnwidth]{effectivness.png}
 
 Notice how, for the first time, effectiveness did not necessarily equate to small execution time, due to the communication overhead.
 
@@ -220,11 +221,47 @@ nature of the graph is to be expected):
 
 \includegraphics[width=0.75\columnwidth]{heat.png}
 
+The same mistake is present in the 3 charts below, showing the effectiveness, walltime and speedup of the code
+with reductions at every step (\texttt{-k 1}):
+
 \includegraphics[width=0.75\columnwidth]{effectivness_withreductions.png} 
 
 \includegraphics[width=0.75\columnwidth]{walltime_withreductions.png}
 
 \includegraphics[width=0.75\columnwidth]{speedup_withreductions.png} 
+
+\textbf{Discussion}
+
+We used the \texttt{PGI\_ACC\_TIME} environment variable to confirm that our code was running correctly (for example,
+that it was only reaching the \texttt{enter data} region once). The output agrees with this, and justifies our earlier
+decision not to consider copying in portions of matrices (or using \texttt{create} and doing the work on the GPU)
+due to the massive differences in time between the first data region (copying data in) and the first compute region.
+It also shows that the computation times for the blocks are largely balanced, with only small differences between them.
+One example (for a $5000\times5000$ matrix, and the above parameters) is provided below:
+
+\begin{verbatim}
+71: data region reached 1 time
+    71: data copyin transfers: 36
+         device time(us): total=421 max=17 min=3 avg=11
+86: data region reached 2000 times
+86: compute region reached 2000 times
+    86: kernel launched 2000 times
+        grid: [5000]  block: [128]
+         device time(us): total=15,220,640 max=7,638 min=7,600 avg=7,610
+\end{verbatim}
+
+We can get some insight into how the problem is being split up by PGI by considering the grid/block sizes above, but
+also more interestingly, for the reduction, which is done very simplistically, using a reduction kernel launched after
+a main kernel. Again, from the same example:
+
+\begin{verbatim}
+124: kernel launched 1 time
+    grid: [5000]  block: [256]
+     device time(us): total=3,105 max=3,105 min=3,105 avg=3,105
+124: reduction kernel launched 1 time
+    grid: [4]  block: [256]
+     device time(us): total=25 max=25 min=25 avg=25
+\end{verbatim}
 
 \end{homeworkProblem}
 
@@ -235,6 +272,8 @@ nature of the graph is to be expected):
 \begin{homeworkProblem}[Matmul]
 
 Small intro here
+
+We discussed \texttt{PGI\_ACC\_TIME} above so we won't discuss it again for the less interesting matmul case.
 
 \includegraphics[width=0.75\columnwidth]{fig.png}
 
