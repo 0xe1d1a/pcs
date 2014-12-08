@@ -331,7 +331,8 @@ for tiny sizes like $n=100$ (10,000 elements), the copying eclipses the computat
 \end{verbatim}
 
 You can observe that, if we only perform one iteration, then the time taken for the multiplication scales reasonably
-well for the number of elements with both OpenACC and OpenMP, but OpenMP is considerably faster:
+well for the number of elements with both OpenACC and OpenMP, but OpenMP is considerably faster (you can also see
+the overhead for the OpenACC copy with the tiny sizes):
 
 \includegraphics[width=0.75\columnwidth]{bigfig.png} 
 
