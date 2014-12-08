@@ -140,7 +140,10 @@
 %	Introduction
 %----------------------------------------------------------------------------------------
 \begin{homeworkProblem}[Introduction]
-	intro
+
+This assignment asked us to perform experiments using OpenACC. In this report, we present results from
+the first two parts: first, experiments from accelerating our heat dissipation code, and then some
+results from the provided matmul code.
 
 \end{homeworkProblem}
 %----------------------------------------------------------------------------------------
@@ -152,33 +155,68 @@
 \begin{homeworkProblem}[Heat dissipation | OpenACC]
 \textbf{Solution description}
 
-We also parallelize the reduction step as shown in the snippet below.
+Our solution this time is based on the reference code, due to issues with the extensive
+use of pointer arithmetic in our original code. We used the adapted version of the reference
+code from Franz Geiger, which fixes compilation issues with the PGI compiler due to the lack
+of support for C99 multidimensional variable-length arrays.
+
+We rearranged the code to remove unnecessary smearing iterations from the computation loops,
+and to move it all into a single function for simplicity.
+
+We copy all three matrices (the conduction data, and the source/destination matrices) in at
+the start of the main loop. The destination data is largely garbage at this point, and so a
+small performance improvement could be obtained by only copying in the (smeared) edges, but
+for simplicity we didn't do thisa.
+
+\csnippet{main}{Main loop}
+
+We parallelized the main dissipation computation, including the smearing. Note that we use
+the \texttt{present} directive, which avoids an unnecessary copy but also makes the GPU
+aware of the swapped destination/source pointers.
+
+\csnippet{compute}{Dissipation computation}
+
+And we also parallelized the reduction step, using OpenACC's directive:
 
 \csnippet{reduction}{Reduction using acc directive}
 
+(We also included OpenMP directives, but the resulting code is slower than our original OpenMP
+code, so we didn't use it.)
+
 \textbf{Evaluation - Experiments}
 
-We run our experiments on the DAS-4 system using a normal node which has 8 physical cores.
+We run our experiments on the DAS-4 system. For pthreads/OpenMP, we used a normal node which has 8 physical cores.
+For the OpenACC results, we used the nvidia (CUDA) backend of the PGI compiler, and ran the result on the DAS-4
+systems with either a GTX480 or a Tesla C2050. The limited availability of the nodes with other GPU types made it
+difficult to experiment with them.
 
 \includegraphics[width=0.75\columnwidth]{effectivness.png}
 
-
-The figure above shows the effectivness of the parallelism. The experiments where made with the following parameters:
+The figure above shows the effectivness of the parallelisation. The experiments were made with the following parameters:
 
 \begin{verbatim}
 ./heat -e 0.0 -i 2000 -k 2001
 \end{verbatim}
 
-Unfortunately we couldn't exeperiment with a lot different accelerators since most of them were being used all the time.
-
 \includegraphics[width=0.75\columnwidth]{effectivness.png}
 
-Notice how for the first time effectiveness does not necessarily mean small execution time because of the communication overhead.
-
+Notice how, for the first time, effectiveness did not necessarily equate to small execution time, due to the communication overhead.
 
 \includegraphics[width=0.75\columnwidth]{walltime.png} 
 
 \includegraphics[width=0.75\columnwidth]{speedup_heat.png} 
+
+A good GPU implementation of this problem would proceed using tiles/blocks (since the neighbours which are needed
+by each computation are in all directions), ideally copying each block into shared memory rather than accessing global
+memory repeatedly. Unfortunately, PGI doesn't support the OpenACC 2.0 \texttt{tile} pragma, and in any case, the
+details of shared memory are not exposed.
+
+We did, however, perform some experiments to try working out the optimal combination of gang, worker and vector
+sizes to use. Unfortunately, these results were invalidated shortly before submitting this report when we realised
+that we'd made a fundamental mistake in the loop iterations (we were iterating over the horizontal direction in the
+outer loop, rather than the vertical one), but we present an example graph showing an example portion of our results
+from these experiments anyway (PGI assigns the workers/vectors to dimensions of \texttt{threadIdx}, so the symmetric
+nature of the graph is to be expected):
 
 \includegraphics[width=0.75\columnwidth]{heat.png}
 
@@ -187,8 +225,6 @@ Notice how for the first time effectiveness does not necessarily mean small exec
 \includegraphics[width=0.75\columnwidth]{walltime_withreductions.png}
 
 \includegraphics[width=0.75\columnwidth]{speedup_withreductions.png} 
-
-
 
 \end{homeworkProblem}
 
@@ -205,6 +241,8 @@ Small intro here
 \includegraphics[width=0.75\columnwidth]{speedup.png} 
 
 \includegraphics[width=0.75\columnwidth]{bigfig.png} 
+
+\includegraphics[width=0.75\columnwidth]{matmul_more_elements.png}
 
 %one more fig coming here just like fig1 but with more elements	
 
