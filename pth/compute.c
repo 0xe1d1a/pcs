@@ -1,3 +1,5 @@
+#define _GNU_SOURCE
+#include <sched.h>
 #include <sys/time.h>
 #include <math.h>
 #include <stdlib.h>
@@ -234,6 +236,13 @@ void do_compute(const struct parameters* p, struct results *r) {
 		// thread id 0 is master thread (us)
 		if (i!=0)
 			pthread_create(&threads[i], NULL, (void *)&thread_main, &params[i]);
+		else
+			threads[i] = pthread_self();
+
+		cpu_set_t cpuset;
+		CPU_ZERO(&cpuset);
+		CPU_SET(i, &cpuset);
+		pthread_setaffinity_np(threads[i], sizeof(cpu_set_t), &cpuset);
 	}
 
 	// take our own copy of the thread params	
