@@ -188,7 +188,8 @@ code, so we didn't use it.)
 
 \textbf{Evaluation - Experiments}
 
-We run our experiments on the DAS-4 system. For pthreads/OpenMP, we used a normal node which has 8 physical cores.
+We run our experiments on the DAS-4 system. For pthreads/OpenMP, we used a normal node which has 8 physical cores,
+and used 8 threads, which we found to perform best in previous assignments.
 For the OpenACC results, we used the nvidia (CUDA) backend of the PGI compiler, and ran the result on the DAS-4
 systems with either a GTX480 or a Tesla C2050. The limited availability of the nodes with other GPU types made it
 difficult to experiment with them.
@@ -201,7 +202,12 @@ The figure above shows the effectiveness of the parallelisation. The experiments
 ./heat -e 0.0 -i 2000 -k 2001
 \end{verbatim}
 
-Notice how, for the first time, effectiveness did not necessarily equate to small execution time, due to the communication overhead.
+Unsurprisingly, the OpenACC version is generally far superior when using reasonable problem sizes (for the tiny sizes,
+an \texttt{if} clause could be added, similarly to the situation with OpenMP), especially when moving beyond the `optimal'
+$1000\times1000$ size for pthreads/OpenMP and towards large, long-running instances of the problem, since any setup time is eclipsed by
+the large number of iterations we use here.
+
+The C2050 has very similar hardware to the GTX480, but with fewer cores, so as expected it is somewhat slower.
 
 \includegraphics[width=0.75\columnwidth]{walltime.png} 
 
@@ -306,7 +312,23 @@ a main kernel. Again, from the same example:
 \begin{homeworkProblem}[Matmul]
 
 We discussed a lot of the suggestions in the matmul portion of the assignment (e.g., \texttt{PGI\_ACC\_TIME}) above,
-so we won't discuss these details again for the less interesting matmul case, but rather simply present our results.
+and since the code was provided for us (so we don't have to worry about optimising sizes or pragmas),
+we won't discuss these details again for the less interesting matmul case, other than to take a glance at the timing
+needed for the transfers. For huge sizes or larger number of iterations, the transfers were not significant, but
+for tiny sizes like $n=100$ (10,000 elements), the copying eclipses the computation time for a single iteration:
+
+\begin{verbatim}
+45: data copyin transfers: 4
+     device time(us): total=36 max=18 min=5 avg=9
+67: data copyout transfers: 1
+     device time(us): total=14 max=14 min=14 avg=14
+48: kernel launched 1 time
+    grid: [40]  block: [256]
+     device time(us): total=24 max=24 min=24 avg=24
+61: kernel launched 1 time
+    grid: [40]  block: [256]
+     device time(us): total=5 max=5 min=5 avg=5
+\end{verbatim}
 
 You can observe that, if we only perform one iteration, then the time taken for the multiplication scales reasonably
 well for the number of elements with both OpenACC and OpenMP, but OpenMP is considerably faster:
