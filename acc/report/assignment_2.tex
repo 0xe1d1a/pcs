@@ -232,6 +232,38 @@ with reductions at every step (\texttt{-k 1}):
 
 \textbf{Discussion}
 
+We can use \texttt{pgaccelinfo} to investigate attributes such as the warp size, maximum block size,
+available shared memory, etc, which we didn't yet find particularly useful during this assignment due to
+the limitations of OpenACC. Some example output, from a node with a GTX480:
+
+\begin{verbatim}
+Total Constant Memory:         65536
+Total Shared Memory per Block: 49152
+Registers per Block:           32768
+Warp Size:                     32
+Maximum Threads per Block:     1024
+Maximum Block Dimensions:      1024, 1024, 64
+Maximum Grid Dimensions:       65535 x 65535 x 65535
+\end{verbatim}
+
+To make sure our compute code is compiled optimally, we consider the \texttt{-Minfo} output, which gives
+us information about where Tesla code is generated (and when loops are not vectorized). For example,
+for the reduction loop (the outer loop is on line 124, and the inner loop on line 127):
+
+\begin{verbatim}
+    124, Generating present(dst[:?])
+         Generating present(src[:?])
+         Accelerator kernel generated
+        125, #pragma acc loop gang /* blockIdx.x */
+        127, #pragma acc loop vector(256) /* threadIdx.x */
+        132, Min reduction generated for tmin
+        135, Max reduction generated for tmax
+        138, Sum reduction generated for tavg
+        141, Max reduction generated for maxdiff
+    124, Generating Tesla code
+    127, Loop is parallelizable
+\end{verbatim}
+
 We used the \texttt{PGI\_ACC\_TIME} environment variable to confirm that our code was running correctly (for example,
 that it was only reaching the \texttt{enter data} region once). The output agrees with this, and justifies our earlier
 decision not to consider copying in portions of matrices (or using \texttt{create} and doing the work on the GPU)
@@ -263,6 +295,8 @@ a main kernel. Again, from the same example:
      device time(us): total=25 max=25 min=25 avg=25
 \end{verbatim}
 
+\texttt{PGI\_ACC\_DEBUG} gives somewhat similar (but more detailed) information, although without the timings.
+
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
@@ -271,19 +305,23 @@ a main kernel. Again, from the same example:
 
 \begin{homeworkProblem}[Matmul]
 
-Small intro here
+We discussed a lot of the suggestions in the matmul portion of the assignment (e.g., \texttt{PGI\_ACC\_TIME}) above,
+so we won't discuss these details again for the less interesting matmul case, but rather simply present our results.
 
-We discussed \texttt{PGI\_ACC\_TIME} above so we won't discuss it again for the less interesting matmul case.
+You can observe that, if we only perform one iteration, then the time taken for the multiplication scales reasonably
+well for the number of elements with both OpenACC and OpenMP, but OpenMP is considerably faster:
+
+\includegraphics[width=0.75\columnwidth]{bigfig.png} 
+
+And this is similar for a far larger number of elements:
 
 \includegraphics[width=0.75\columnwidth]{fig.png}
 
 \includegraphics[width=0.75\columnwidth]{speedup.png} 
 
-\includegraphics[width=0.75\columnwidth]{bigfig.png} 
+And even with a huge number of elements, the situation is similar. OpenACC is (reassuringly) clearly much better than at least the sequential versions:
 
 \includegraphics[width=0.75\columnwidth]{matmul_more_elements.png}
-
-%one more fig coming here just like fig1 but with more elements	
 
 \end{homeworkProblem}
 
