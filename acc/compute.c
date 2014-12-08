@@ -82,7 +82,8 @@ void do_compute(const struct parameters* p, struct results *r)
 		{ double *tmp = src; src = dst; dst = tmp; }
 
 		/* compute */
-		#pragma acc parallel loop gang num_gangs(h-2) num_workers(4) vector_length(24) independent present(c[0:w*h], dst[0:w*h], src[0:w*h])
+		#pragma omp parallel for
+		#pragma acc parallel loop gang independent present(c[0:w*h], dst[0:w*h], src[0:w*h])
 		for (size_t y = 1; y < h - 1; ++y)
 		{
 			#pragma acc loop worker independent
@@ -119,11 +120,13 @@ void do_compute(const struct parameters* p, struct results *r)
 			double tavg = 0.0;
 
 			// iterate over non-constant rows
-			#pragma acc parallel loop gang num_gangs(w-2) num_workers(4) vector_length(24) reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg) present(dst[0:w*h], src[0:w*h])
-			for (size_t x = 1; x < w - 1; ++x) {
-				#pragma acc loop worker independent
-				for (size_t y = 1; y < h - 1; ++y) {
+			#pragma omp parallel for reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg)
+			#pragma acc parallel loop gang independent reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg) present(dst[0:w*h], src[0:w*h])
+			for (size_t y = 1; y < h - 1; ++y) {
+				#pragma acc loop vectors independent
+				for (size_t x = 1; x < w - 1; ++x) {
 					double result = dst[w*y + x];
+					double old = src[w*y + x];
 
 					// update minimum temprature if needed
 					if (result < tmin)
@@ -134,7 +137,7 @@ void do_compute(const struct parameters* p, struct results *r)
 					// update the sum (not yet average)
 					tavg += result;
 					// update the maximum temprature difference if needed
-					double diff = fabs(src[w*y + x] - result);
+					double diff = fabs(old - result);
 					if (diff > maxdiff)
 						maxdiff = diff;
 				}
