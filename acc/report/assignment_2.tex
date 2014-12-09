@@ -234,7 +234,26 @@ with reductions at every step (\texttt{-k 1}):
 
 \includegraphics[width=0.75\columnwidth]{walltime_withreductions.png}
 
-\includegraphics[width=0.75\columnwidth]{speedup_withreductions.png} 
+\includegraphics[width=0.75\columnwidth]{speedup_withreductions.png}
+
+After fixing the mistake we produced the following graphs:
+
+The first three depict a comparison between pthreads, openMP and openACC
+without doing reductions
+
+ \includegraphics[width=0.75\columnwidth]{accvompvpth_eff.png}
+
+\includegraphics[width=0.75\columnwidth]{accvompvpth_wt.png}
+
+\includegraphics[width=0.75\columnwidth]{accvompvpth_su.png}
+
+Same comparison with reductions at every step (\texttt{-k 1}):
+
+\includegraphics[width=0.75\columnwidth]{accvompvpth_eff_withreductions.png}
+
+\includegraphics[width=0.75\columnwidth]{accvompvpth_wt_withreductions.png}
+
+\includegraphics[width=0.75\columnwidth]{accvompvpth_su_withreductions.png}
 
 \textbf{Discussion}
 
