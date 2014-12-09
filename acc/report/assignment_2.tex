@@ -194,24 +194,19 @@ For the OpenACC results, we used the nvidia (CUDA) backend of the PGI compiler, 
 systems with either a GTX480 or a Tesla C2050. The limited availability of the nodes with other GPU types made it
 difficult to experiment with them.
 
-\includegraphics[width=0.75\columnwidth]{effectivness.png}
+\includegraphics[width=0.75\columnwidth]{speedup_heat.png} 
 
-The figure above shows the effectiveness of the parallelisation. The experiments were made with the following parameters:
+%\includegraphics[width=0.75\columnwidth]{walltime.png} 
+%\includegraphics[width=0.75\columnwidth]{effectivness.png}
+
+The figure above shows the speedup of the parallelisation (we discuss below why the speedup is so unimpressive).
+The experiments were made with the following parameters:
 
 \begin{verbatim}
 ./heat -e 0.0 -i 2000 -k 2001
 \end{verbatim}
 
-Unsurprisingly, the OpenACC version is generally far superior when using reasonable problem sizes (for the tiny sizes,
-an \texttt{if} clause could be added, similarly to the situation with OpenMP), especially when moving beyond the `optimal'
-$1000\times1000$ size for pthreads/OpenMP and towards large, long-running instances of the problem, since any setup time is eclipsed by
-the large number of iterations we use here.
-
 The C2050 has very similar hardware to the GTX480, but with fewer cores, so as expected it is somewhat slower.
-
-\includegraphics[width=0.75\columnwidth]{walltime.png} 
-
-\includegraphics[width=0.75\columnwidth]{speedup_heat.png} 
 
 A good GPU implementation of this problem would proceed using tiles/blocks (since the neighbours which are needed
 by each computation are in all directions), ideally copying each block into shared memory rather than accessing global
@@ -236,10 +231,16 @@ with reductions at every step (\texttt{-k 1}):
 
 \includegraphics[width=0.75\columnwidth]{speedup_withreductions.png}
 
-After fixing the mistake we produced the following graphs:
+\textbf{Evaluation - Experiments 2}
 
-The first three depict a comparison between pthreads, openMP and openACC
-without doing reductions
+After fixing the mistake, we (quickly) produced the following graphs:
+
+The first three depict a comparison between pthreads, OpenMP and OpenACC without doing reductions.
+
+Unsurprisingly, the OpenACC version is generally far superior when using reasonable problem sizes (for the tiny sizes,
+an \texttt{if} clause could be added, similarly to the situation with OpenMP), especially when moving beyond the `optimal'
+$1000\times1000$ size for pthreads/OpenMP and towards large, long-running instances of the problem, since any setup time is eclipsed by
+the large number of iterations we use here.
 
  \includegraphics[width=0.75\columnwidth]{accvompvpth_eff.png}
 
@@ -247,7 +248,9 @@ without doing reductions
 
 \includegraphics[width=0.75\columnwidth]{accvompvpth_su.png}
 
-Same comparison with reductions at every step (\texttt{-k 1}):
+And these show the same comparison, but with reductions at every step (\texttt{-k 1}). OpenACC does even better
+here, we assume at least partially because the memory accesses (two accesses per matrix entry) are far more
+easily translated to GPU code than the rather more complicated situation with the dissipation:
 
 \includegraphics[width=0.75\columnwidth]{accvompvpth_eff_withreductions.png}
 
@@ -256,6 +259,11 @@ Same comparison with reductions at every step (\texttt{-k 1}):
 \includegraphics[width=0.75\columnwidth]{accvompvpth_su_withreductions.png}
 
 \textbf{Discussion}
+
+So, we saw that OpenACC gives very impressive speedups, even with our fairly naive attempt at an implementation.
+It's unfortunate that the PGI compiler is so difficult to work with (varied internal compiler errors were suffered
+during the creation of this report), but that may be resolved in the future with the addition of support to gcc.
+We will now discuss a few loose ends.
 
 We can use \texttt{pgaccelinfo} to investigate attributes such as the warp size, maximum block size,
 available shared memory, etc, which we didn't yet find particularly useful during this assignment due to
@@ -322,6 +330,10 @@ a main kernel. Again, from the same example:
 
 \texttt{PGI\_ACC\_DEBUG} gives somewhat similar (but more detailed) information, although without the timings.
 
+And one last troublesome point is that the GPUs have a non-trivial `startup time' for small problem sizes, so doing
+accurate timings is kind of tricky unless you do them repeatedly and throw away the first one and any outliers!
+But OpenACC was `fun' to play with. Now let's see where it goes wrong..
+
 \end{homeworkProblem}
 
 %----------------------------------------------------------------------------------------
@@ -334,7 +346,8 @@ We discussed a lot of the suggestions in the matmul portion of the assignment (e
 and since the code was provided for us (so we don't have to worry about optimising sizes or pragmas),
 we won't discuss these details again for the less interesting matmul case, other than to take a glance at the timing
 needed for the transfers. For huge sizes or larger number of iterations, the transfers were not significant, but
-for tiny sizes like $n=100$ (10,000 elements), the copying eclipses the computation time for a single iteration:
+for tiny sizes like $n=100$ (10,000 elements), the copying eclipses the computation time for a single iteration,
+and the overhead in general is significant:
 
 \begin{verbatim}
 45: data copyin transfers: 4
@@ -344,12 +357,29 @@ for tiny sizes like $n=100$ (10,000 elements), the copying eclipses the computat
 48: kernel launched 1 time
     grid: [40]  block: [256]
      device time(us): total=24 max=24 min=24 avg=24
+    elapsed time(us): total=32 max=32 min=32 avg=32
 61: kernel launched 1 time
     grid: [40]  block: [256]
      device time(us): total=5 max=5 min=5 avg=5
+    elapsed time(us): total=13 max=13 min=13 avg=13
 \end{verbatim}
 
-You can observe that, if we only perform one iteration, then the time taken for the multiplication scales reasonably
+Here's some (averaged) data to justify our claim that they quickly become insignificant (device timings in microseconds,
+the actual elapsed time follows a similar pattern). In fact the *lower* copy times for the $200\times200$ variant, despite
+the averaging, argue that it might be very noisy too:
+
+\begin{center}
+\begin{tabular}{ |l|l|l|l|l|l| }
+\hline
+size & copy time & 1 iters compute & 2 iters compute & 3 iters compute & 5 iters compute\\
+$100\times100$ & 36+15=51 & 23+5=28 & 27+10=37 & 29+14=42 & 41+24=65\\
+$150\times150$ & 38+15=53 & 24+5=29 & 25+15=40 & 33+15=48 & 38+22=60\\
+$200\times200$ & 34+14=48 & 1868+8=1876 & 3591+14=3605 & 5513+20=5533 & 8923+32=8955\\
+\hline
+\end{tabular}
+\end{center}
+
+And finally, some comparisons. You can observe that, if we only perform one iteration, then the time taken for the multiplication scales reasonably
 well for the number of elements with both OpenACC and OpenMP, but OpenMP is considerably faster (you can also see
 the overhead for the OpenACC copy with the tiny sizes):
 
@@ -364,6 +394,14 @@ And this is similar for a far larger number of elements:
 And even with a huge number of elements, the situation is similar. OpenACC is (reassuringly) clearly much better than at least the sequential versions:
 
 \includegraphics[width=0.75\columnwidth]{matmul_more_elements.png}
+
+We can also see that the `advanced' version which does the memory copies manually and tries to do the reduction on the loop is actually
+worse (it's not clear why, perhaps due to the extra kernels spawned for the reduction step, but also maybe just because it's an
+inefficiently indirect approach).
+
+So the conclusion to be made here is perhaps that writing good GPU code is difficult, and that OpenACC doesn't help enough. It is possible to do matmul
+well on the GPU, but it requires copying portions of the matrices into shared memory, and OpenACC simply doesn't give us anywhere near enough control
+over this.
 
 \end{homeworkProblem}
 
