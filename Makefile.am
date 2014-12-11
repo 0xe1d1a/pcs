@@ -1,4 +1,4 @@
-SUBDIRS = . seq pth omp acc 
+SUBDIRS = . seq pth omp acc cuda phi
 
 #
 # Data files
