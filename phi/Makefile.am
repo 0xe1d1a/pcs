@@ -1,4 +1,4 @@
-noinst_PROGRAMS = heat
+noinst_PROGRAMS = heat heat_mic
 
 CLEANFILES=core.*
 
@@ -9,6 +9,11 @@ CPPFLAGS= -I $(COMMON)
 heat_SOURCES = $(COMMON_FILES) compute.c
 heat_CPPFLAGS = -openmp -O3 -vec-report3
 heat_LDFLAGS = -openmp
+
+heat_mic_SOURCES = $(COMMON_FILES) compute.c
+heat_mic_CPPFLAGS = -openmp -O3 -vec-report3 -mmic
+heat_mic_LDFLAGS = -openmp -mmic
+
 
 #
 # Maintenance rules
