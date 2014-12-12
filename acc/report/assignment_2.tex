@@ -396,13 +396,78 @@ And even with a huge number of elements, the situation is similar. OpenACC is (r
 
 \includegraphics[width=0.75\columnwidth]{matmul_more_elements.png}
 
-We can also see that the `advanced' version which does the memory copies manually and tries to do the reduction on the loop is actually
-worse (it's not clear why, perhaps due to the extra kernels spawned for the reduction step, but also maybe just because it's an
-inefficiently indirect approach).
+We can also see that the `advanced' version which does the memory copies manually and tries to do the reduction on the loop is slightly
+better (it's not clear why, perhaps due to the extra kernels spawned for the reduction step, although this has been explained by others
+since we submitted the first revision of this).
 
 So the conclusion to be made here is perhaps that writing good GPU code is difficult, and that OpenACC doesn't help enough. It is possible to do matmul
 well on the GPU, but it requires copying portions of the matrices into shared memory, and OpenACC simply doesn't give us anywhere near enough control
 over this.
+
+\end{homeworkProblem}
+
+\begin{homeworkProblem}[Maximising performance]
+
+We added two new heat dissipation implementation variants to our existing ones: an attempt at a CUDA implementation, and
+a variant using \texttt{icc} and OpenMP directives (from our previous OpenMP assignment). These are integrated into the
+build system of our assignment and present in the 'cuda' and 'phi' directories respectively.
+
+We used the \texttt{icc} variant in two ways: we added offload pragmas and tested them on a DAS-4 node with a
+Xeon Phi, and we compiled it with the \texttt{-mmic} flag and ran it directly on an Xeon Phi.
+
+The data transfer times for the offload version were very large, so we tried to minimise this by also doing the
+reduction on the accelerator, and only transferring data at the very start of the computation.
+The Intel documentation was rather confusing about the offload directives in the presence of changing pointers;
+it turns out (as discussed in a forum post linked on the mailing list) that it is necessary to use the \texttt{in}
+directive with a length of 0 in order to notify the accelerator that a pointer has changed, rather than the \texttt{nocopy}
+directive which doesn't update the on-accelerator pointers to match the host pointers. The relevant snippets of code
+are displayed below.
+
+\csnippet{offload}{Offload pragmas}
+
+We can see that it worked by checking the output of the code when run with the environment variable \texttt{H\_TRACE=1},
+for example:
+\begin{verbatim}
+HOST:  Offload function __offload_entry_compute_c_70do_compute, is_empty=1, #varDescs=3, #waits=0, signal=(nil)
+HOST:  Total pointer data sent to target: [24096096] bytes
+HOST:  Offload function __offload_entry_compute_c_84do_compute, is_empty=0, #varDescs=5, #waits=0, signal=(nil)
+HOST:  Total pointer data sent to target: [0] bytes
+HOST:  Offload function __offload_entry_compute_c_122do_compute, is_empty=0, #varDescs=8, #waits=0, signal=(nil)
+HOST:  Total pointer data sent to target: [0] bytes
+\end{verbatim}
+
+The CUDA implementation is extremely trivial; due to time constraints we only accelerated the computation portion, not the reduction.
+It might be a good starting point for future improvements though; PGI will leave the files containing the generated CUDA code if
+you pass \texttt{-ta=tesla:keep}, but this compiler output is not user-modifiable (nor user-understandable for the most part),
+so it is not a useful starting point.
+
+As you can see, the Xeon Phi implementation is definitely competitive, while the CUDA implementation lags somewhat behind our
+OpenACC code:
+
+\includegraphics[width=0.75\columnwidth]{bonus_effectivness.png}
+
+\includegraphics[width=0.75\columnwidth]{bonus_wt.png}
+
+And similarly, the Xeon Phi code works well when using reductions (we don't compare the CUDA code here):
+
+\includegraphics[width=0.75\columnwidth]{bonus_effectivness_wr.png}
+
+\includegraphics[width=0.75\columnwidth]{bonus_wt_wr.png}
+
+Since we only ran a small number of experiments, we are primarily focused on improving our accelerated versions,
+and the differences are fairly clear, we don't provide a speedup chart here (the sequential runs for this number
+of iterations are, unsurprisingly, incredibly slow in comparison).
+
+We didn't continue comparisons with the large $5000\times5000$ size, because the computation times turned out to only be
+a small portion of the program runtimes when the code ran natively on the Xeon Phi, as displayed in the graph below. We didn't
+find time to work out exactly what the problem was here, but we suspect that there might be some kind of problem with reading
+the large input files (of around 200MB total) on the RAM-based filesystem.
+
+\includegraphics[width=0.75\columnwidth]{bonus_realvscompute.png}
+
+In conclusion, OpenACC is far more immediately friendly to use than CUDA; and
+use of the Xeon Phi is extremely promising, but much like OpenACC, adds quite a lot of complexity and
+strange problems to the life of the programmer.
 
 \end{homeworkProblem}
 
