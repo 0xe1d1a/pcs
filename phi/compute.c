@@ -118,7 +118,8 @@ void do_compute(const struct parameters* p, struct results *r)
 			double tavg = 0.0;
 
 			// iterate over non-constant rows
-			#pragma offload_transfer target(mic) out(src,dst:length(w*h) alloc_if(0) free_if(0))
+			//#pragma offload_transfer target(mic) out(src,dst:length(w*h) alloc_if(0) free_if(0))
+			#pragma offload target(mic) inout(tmin, tmax, maxdiff, tavg) in(src,dst:length(0) alloc_if(0) free_if(0))
 			#pragma omp parallel for reduction(min: tmin) reduction(max: tmax) reduction(max: maxdiff) reduction(+: tavg)
 			for (size_t y = 1; y < h - 1; ++y) {
 				for (size_t x = 1; x < w - 1; ++x) {
