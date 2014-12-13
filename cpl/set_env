@@ -1,0 +1,10 @@
+#!/bin/bash
+
+if [ -z "$CHPL_HOME" ]; then
+  cd /home/rdouma/chapel-1.10.0/
+  source util/setchplenv.bash
+  cd -
+fi
+
+
+
