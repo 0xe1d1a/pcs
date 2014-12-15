@@ -43,24 +43,15 @@ proc do_compute(p : params)
 	src[i,p.M+1] = dst[i,1];
    }
   
-   writeln(c);
     t.start(); 					//start timer
     for iteration in 1..p.maxiter {
 	dst <=> src;				//swap buffers
-	writeln("Iteration ----------- ", iteration);
-	writeln("dst");
-	writeln(dst);
-	writeln();
-	writeln();
-	writeln("src");
-	writeln(src);
-	writeln();
 	for i in 1..p.N {
 	    for j in 1..p.M {			//start compute
 		    var ij = (i,j);
 		    var cond = c(ij);
 		    var weight = 1.0 - cond;
-		    dst(ij) = weight * src(ij) + 
+		    dst(ij) = cond * src(ij) + 
 		        (src(ij+up) + src(ij+down) + src(ij+left) + src(ij+right)) * (weight * dir) +
 		        (src(ij+upleft) + src(ij+upright) + src(ij+downleft) + src(ij+downright)) * (weight * diag);
 	    }
