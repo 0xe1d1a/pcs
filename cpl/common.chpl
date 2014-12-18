@@ -12,6 +12,7 @@ record params {
     const nthreads : int;
     const tinit;
     const tcond;
+    const printreports;
 }
 
 record results {

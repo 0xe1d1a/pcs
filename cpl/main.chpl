@@ -12,6 +12,7 @@ config const Gp = 1;
 config const Gc = "pattern_100x150.pgm";
 config const Gt = "pattern_100x150.pgm";
 config const Gh = 0;
+config const Gr = 0;
 
 proc usage()
 {
@@ -27,6 +28,7 @@ proc usage()
            "  -sGL=NUM     Coldest temperature in input/output images.\n",
            "  -sGH=NUM     Warmest temperature in input/output images.\n",
            "  -sGp=NUM     Number of threads to use (when applicable).\n",
+           "  -sGr=1       Print a report every reduction cycle.\n",
            "  -sGh=1       Print this help.\n"
            );
     exit(0);
@@ -40,7 +42,7 @@ proc readpgm(fname, height, width, min, max)
     var (w,h) = f.readln(int, int);
     var maxv = f.readln(int);
 
-    var im : [1..w, 1..w] real;
+    var im : [1..h, 1..w] real;
 
     for i in 1..h {
         for j in 1..w {
@@ -65,7 +67,8 @@ proc read_parameters()
            "  -sGt=", Gt, " # input file for initial temperatures\n",
            "  -sGL=", GL, " # coolest temperature in input/output\n",
            "  -sGH=", GH, " # highest temperature in input/output\n",
-           "  -sGp=", Gp, " # number of threads (if applicable)");
+           "  -sGp=", Gp, " # number of threads (if applicable)\n",
+           "  -sGr=", Gr, " # print report every reduction cycle");
 
     var tinit = readpgm(Gt, Gn, Gm, GL, GH);
     var tcond = readpgm(Gc, Gn, Gm, 0.0, 1.0);
@@ -76,7 +79,7 @@ proc read_parameters()
 proc fill_record(tinit, tcond)
 {
     var p = new params(N = Gn, M = Gm, maxiter = Gi, period = Gk, threshold = Ge, nthreads = Gp, 
-                       io_tmin = GL, io_tmax = GH, tinit = tinit, tcond = tcond);
+                       io_tmin = GL, io_tmax = GH, printreports = Gr, tinit = tinit, tcond = tcond);
 
     return p;
 }
