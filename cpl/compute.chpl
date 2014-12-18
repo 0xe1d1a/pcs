@@ -140,7 +140,7 @@ proc do_compute(p : params)
 	    r.niter = iteration;
 	    r.time = t.elapsed();
 	    var done = (r.maxdiff < p.threshold || iteration == p.maxiter);
-	    if (0) then report_results(p, r);
+	    if (p.printreports) then report_results(p, r);
 	}
     }
 
