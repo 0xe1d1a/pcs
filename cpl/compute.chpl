@@ -1,7 +1,42 @@
 use common;
 use Time;
+use BlockDist;
+use AdvancedIters;
 
+record heatReductionResults
+{
+    type eltType;
+    var tmin, tmax, tsum: eltType;
+}
 
+/* based on reference: modules/internal/ChapelReduce.chpl
+   also helpful: http://faculty.knox.edu/dbunde/teaching/chapel/#Custom%20Reductions (thanks Franz) */
+class heatReduction : ReduceScanOp
+{
+    type eltType;
+    var tmin: eltType = max(eltType);
+    var tmax: eltType = min(eltType);
+    var tsum: chpl__sumType(eltType);
+
+    proc accumulate(val: eltType)
+    {
+        if (val < tmin) then tmin = val;
+        if (val > tmax) then tmax = val;
+        tsum += val;
+    }
+
+    proc combine(other: heatReduction)
+    {
+        if (other.tmin < tmin) then tmin = other.tmin;
+        if (other.tmax > tmax) then tmax = other.tmax;
+        tsum += other.tsum;
+    }
+
+    proc generate()
+    {
+        return new heatReductionResults(eltType, tmin, tmax, tsum);
+    }
+}
 
 proc do_compute(p : params) 
 {
@@ -9,25 +44,24 @@ proc do_compute(p : params)
     var r : results;
     /* Timer */
     var t : Timer;
-    var iteration = 0,                    	// iteration counter
-    delta: real;                      		// measure of convergence 
+
+    var iteration = 0;                    	// iteration counter
+    var delta: real;                  		// measure of convergence 
     var epsilon = p.threshold;			// set threshold
     const dir = 0.25 * sqrt(2) / (sqrt(2) + 1.0); 
     const diag = 0.25 / (sqrt(2) + 1.0);
     const down = (-1,0), up = (1,0), right = (0,1), left = (0,-1);
     const upright = (1,1), downright = (-1,1), upleft = (1,-1), downleft = (-1,-1);
 
-    const ProblemSpace = {1..p.N, 1..p.M},    	// domain for grid points
-          BigDomain = {0..p.N+1, 0..p.M+1};   	// domain including boundary points
+    const ProblemSpace = {1..p.N, 1..p.M};       // domain for grid points
+    const BigDomain = {0..p.N+1, 0..p.M+1};   	// domain including boundary points
     var src, dst: [BigDomain] real;  		// source, destination temprature arrays: 
     var c : [BigDomain] real;	     		// conductivity array
-    //copy init values
-    for i in 1..p.N {
-	for j in 1..p.M {
-	    dst[i,j] = p.tinit[i,j];
-	    c[i,j] = p.tcond[i,j];
-	}
-    }
+
+    // copy initial values
+    dst[ProblemSpace] = p.tinit;
+    c[ProblemSpace] = p.tcond;
+
     for i in 1..p.M {				//smear upper-lower bounds
 	dst[0,i] = dst[1,i];
         src[0,i] = dst[1,i];
@@ -35,34 +69,40 @@ proc do_compute(p : params)
 	dst[p.N+1,i] = dst[p.N,i];
 	src[p.N+1,i] = dst[p.N,i];
     }
-   for i in 0..p.N+1 { 				//smear wrap-around bounds
+    for i in 0..p.N+1 { 				//smear wrap-around bounds
 	dst[i,0] = dst[i,p.M];
 	src[i,0] = dst[i,p.M];
 
 	dst[i,p.M+1] = dst[i,1];
 	src[i,p.M+1] = dst[i,1];
-   }
+    }
   
     t.start(); 					//start timer
     for iteration in 1..p.maxiter {
 	dst <=> src;				//swap buffers
-	for i in 1..p.N {
-	    for j in 1..p.M {			//start compute
-		    var ij = (i,j);
-		    var cond = c(ij);
-		    var weight = 1.0 - cond;
-		    dst(ij) = cond * src(ij) + 
-		        (src(ij+up) + src(ij+down) + src(ij+left) + src(ij+right)) * (weight * dir) +
-		        (src(ij+upleft) + src(ij+upright) + src(ij+downleft) + src(ij+downright)) * (weight * diag);
-	    }
+        forall i in 1..p.N {
+          for j in 1..p.M {
+            var ij = (i,j);
+
+            var cond = c(ij);
+	    var weight = 1.0 - cond;
+	    dst(ij) = cond * src(ij) + 
+	        (src(ij+up) + src(ij+down) + src(ij+left) + src(ij+right)) * (weight * dir) +
+	        (src(ij+upleft) + src(ij+upright) + src(ij+downleft) + src(ij+downright)) * (weight * diag);
+          }
+	}
+	forall i in 1..p.N {
             dst[i,0] = dst[i,p.M];
             dst[i,p.M+1] = dst[i,1];
 	}
+
 	if (iteration % p.period == 0 || iteration == p.maxiter) {
-	    r.niter = iteration;
-	    var tmin = 1.0/0.0;
-	    var tmax = -tmin;
-	    var maxdiff = -tmin;
+
+            /* *** first variant: for loop *** */
+
+/*	    var tmin = max(real);
+	    var tmax = min(real);
+	    var maxdiff = min(real);
 	    var tavg = 0.0;
 	    for i in 1..p.N {
             	for j in 1..p.M {  
@@ -77,13 +117,30 @@ proc do_compute(p : params)
 	    }
 	    r.tmin = tmin;
 	    r.tmax = tmax;
-            r.maxdiff = maxdiff;
 	    r.tavg = tavg / (p.N * p.M);
-	    r.time = t.elapsed();
+	    r.maxdiff = maxdiff;*/
 
-	    var done = (maxdiff < p.threshold || iteration == p.maxiter);
+            /* *** second variant: Chapel reduction */
+
+/*            r.maxdiff = max reduce [ij in ProblemSpace] abs(dst[ij] - src[ij]);
+	    r.tmin = min reduce dst[ProblemSpace];
+	    r.tmax = max reduce dst[ProblemSpace];
+	    r.tavg = (+ reduce dst[ProblemSpace]) / (p.N * p.M);*/
+            
+            /* *** third variant: custom Chapel reduction */
+
+            r.maxdiff = max reduce [ij in ProblemSpace] abs(dst[ij] - src[ij]);
+            var reduction = heatReduction reduce dst[ProblemSpace];
+            r.tmin = reduction.tmin;
+            r.tmax = reduction.tmax;
+            r.tavg = reduction.tsum / (p.N * p.M);
+
+            /* shared code :) */
+
+	    r.niter = iteration;
+	    r.time = t.elapsed();
+	    var done = (r.maxdiff < p.threshold || iteration == p.maxiter);
 	    if (0) then report_results(p, r);
-	    //if done then break;
 	}
     }
 
