@@ -141,7 +141,7 @@
 %----------------------------------------------------------------------------------------
 \begin{homeworkProblem}[Introduction]
 
-This assignment asked us to implement heat dissipation in Chapel and perform comparison experiments
+This (sub-)assignment asked us to implement heat dissipation in Chapel and perform comparison experiments
 with our previous implementations.
 
 
@@ -155,56 +155,69 @@ with our previous implementations.
 \begin{homeworkProblem}[Heat dissipation | Chapel]
 \textbf{Solution description}
 
-Our Chapel implementation is a pretty straight forward translation of the C reference 
-code. The interesting part are the code segments which are parallelized by Chapel.
+Our Chapel implementation is a pretty straightforward translation of the C reference 
+code. The interesting parts are the code segments which are parallelized by Chapel.
 
-First let's inspect the main computation loop:
+First, let's inspect the main computation loop:
 
-We used the forall keyword to point out that we want the outer loop parallelized. We also tried
-using one forall ij loop but then we would have to loop through the matrix again in order to fix
-the wrap-around columns, and compared to our current implementation is was slightly faster for
-the 1000x1000 matrix but wouldn't scale well. 
+We used the forall keyword to indicate that we want the outer loop parallelized. We also tried
+using one forall ij loop (which would also be nicer code, going over the domain in a single loop).
+We would have to loop through the matrix again in order to deal with
+the wrap-around columns. Compared to our current implementation a single loop was slightly faster for
+the 1000x1000 matrix, but didn't scale well.
 
 \csnippet{main}{Main loop}
 
-The reduction was far more complex than the computation loop as usual.
-We came up with three different implementations: 
-- The naive forall outer loop
-- Chapel way to reduce
-- Our custom reduce 
+The reduction was far more complex than the computation loop, as usual.
 
-This is the segment of the winner (us ofcourse!) code:
+We came up with three different implementations: 
+
+\begin{itemize}
+\item The naive forall outer loop, which was unsurprisingly not very efficient.
+\item The obvious Chapel way to reduce, but that involves going over the same data four times,
+once for each reduction (apparently Chapel was not clever enough to merge these).
+\item A custom reduction (for min/max/avg only). Trying to do maxdiff using a custom reduction
+seemed unhelpful performance-wise.
+\end{itemize}
+
+This is the code of the latter implementation, based on \texttt{modules/internal/ChapelReduce.chpl},
+and using a custom record to store the results:
 
 \csnippet{reduce}{Reduction loop}
 
-We left the other two implementation as commments in our code.
+We left the other two implementations as commments in our code, for reference.
 
 \textbf{Evaluation - Experiments}
 
 We run our experiments on the DAS-4 system. We used a normal node which has 8 physical cores,
 and used 8 threads, which we found to perform best in previous assignments.
 
+We only performed experiments on $1000 \times 1000$ for now, due to time constraints,
+and only with one iteration count (see the end), but this is fairly representative
+for other reasonably-high iteration counts and matrix sizes. We'll present more in our later
+report update.
+
 The following graphs depict performance and walltime comparison overview without reductions.
 
-The Chapel implementation has very poor performance compared to our openMP or pthread implementation.
-On the other hand, the sequential version of Chapel is pretty competitive with the sequential version of C,
+The Chapel implementation has very poor performance compared to our openMP or pthreads implementation.
+On the other hand, the ``sequential'' (without forall) version of Chapel is pretty competitive with the sequential version of C,
 concerning performance.
 
 \includegraphics[width=0.75\columnwidth]{per_no_reductions.png} 
 
 \includegraphics[width=0.75\columnwidth]{wt_no_reductions.png} 
 
-Depiction of performance and walltime comparison overview with reductions.
+Next, we consider a performance and walltime comparison overview with reductions.
 We noticed that the performance of Chapel with or without reductions is almost the same which is a
 result we didn't have on our earlier assignments concerning reductions. This might mean that the
-parallelization of our main computation look might not be entierly optimized, or our reduction
+parallelization of our main computation look might not be entirely optimized (which seems most likely), or that our reduction
 implementation performs really well.
 
 \includegraphics[width=0.75\columnwidth]{per_with_reductions.png} 
 
 \includegraphics[width=0.75\columnwidth]{wt_with_reductions.png} 
 
-Graph of different thread usage comparison without reductions. We can clearly see the performance
+These are graphs of different thread counts without reductions. We can clearly see the performance
 peak when all 8 threads are used. We also notice poor performance (non linear) when we
 specify 4 threads. 
 
@@ -212,27 +225,29 @@ specify 4 threads.
 
 \includegraphics[width=0.75\columnwidth]{thread_without_reductions_wt.png} 
 
-Graph of different thread usage comparison with reductions. Note that the reduction method
-used is our custom reduction, which as shown above performed best. Equivelant results
-as the ones without reductions.
+Finally, here are graphs of different thread counts with reductions. Note that the reduction method
+used is our custom reduction, which as shown above performed best. As discussed, the speed is similar to the
+speed obtained without reductions, for Chapel, which is quite impressive compared to our other attempts, but
+probably indicates weird problems in our code.
 
 \includegraphics[width=0.75\columnwidth]{thread_with_reductions.png} 
 
 \includegraphics[width=0.75\columnwidth]{thread_with_reductions_wt.png} 
 
+9 threads is far slower (unsurprising, due to HT), and 16 threads is still slower than 8, so we didn't
+include those (yet) in our comparisons.
 
-The experiments without were made with the following parameters:
+The experiments without reduction were made with the following parameters:
 
 \begin{verbatim}
 ./heat -e 0.0 -i 2000 -k 2001
 \end{verbatim}
 
-and with reduction:
+and those with reduction:
 
 \begin{verbatim}
 ./heat -e 0.0 -i 2000 -k 1
 \end{verbatim}
-
 
 \end{homeworkProblem}
 
