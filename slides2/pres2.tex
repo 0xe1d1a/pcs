@@ -13,6 +13,7 @@
 
 \begin{frame}
  \frametitle{CUDA!}
+ \includegraphics[width=\textwidth]{Featureimage-cuda-technology.jpg}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -46,6 +47,11 @@ void __global__ do_calc(double *c, double *src,
     + threadIdx.y + 1;
   ...
 \end{verbatim}
+\end{frame}
+
+\begin{frame}
+ \frametitle{Xeon Phi}
+ \includegraphics[width=0.8\textwidth]{evil-inside-752871.jpg}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -84,7 +90,7 @@ void __global__ do_calc(double *c, double *src,
 \end{frame}
 
 \begin{frame}
- \frametitle{Xeon Phi: fail}
+ \frametitle{Xeon Phi: fail ($1000 \times 1000$)}
  \includegraphics[width=\textwidth]{bonus_realvscompute.png}
 \end{frame}
 
@@ -101,6 +107,18 @@ void __global__ do_calc(double *c, double *src,
 \begin{frame}
  \frametitle{Chapel: Happy Christmas!}
  \includegraphics[width=\textwidth]{chrcha.jpg}
+\end{frame}
+
+\begin{frame}[fragile]
+ \frametitle{Chapel}
+(Benchmarking Usability and Performance of Multicore Languages, October 2014)
+\begin{itemize}
+\item won HPC Most Elegant Language award in 2011
+\pause
+\item ``focused on correctness rather than performance optimizations''
+\pause
+\item ``Chapel took the most time to execute in almost all problems.''
+\end{itemize}
 \end{frame}
 
 \begin{frame}[fragile]
@@ -189,7 +207,7 @@ dst(ij) = cond * src(ij) +
 \end{frame}
 
 \begin{frame}
- \frametitle{Chapel: performance}
+ \frametitle{Chapel: performance ($1000 \times 1000$)}
  \includegraphics[width=\textwidth]{../cpl/report/per_no_reductions.png}
 \end{frame}
 
@@ -266,13 +284,18 @@ r.tavg = reduction.tsum / (p.N * p.M);
 \end{frame}
 
 \begin{frame}
- \frametitle{Chapel: w/reductions}
+ \frametitle{Chapel: w/reductions ($1000 \times 1000$)}
  \includegraphics[width=\textwidth]{../cpl/report/per_with_reductions.png}
 \end{frame}
 
 \begin{frame}
  \frametitle{Questions?}
- (This time we mean it.)
+ (This time we mean it. Probably.)
+\end{frame}
+
+\begin{frame}
+ \frametitle{Happy Holidays}
+ \includegraphics[width=\textwidth]{ice-skating-amsterdam-frozen-canals-netherlands-holland-7.jpg}
 \end{frame}
 
 \end{document}
