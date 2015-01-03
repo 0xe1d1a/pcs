@@ -55,7 +55,7 @@ proc do_compute(p : params)
 
     const ProblemSpace = {1..p.N, 1..p.M};       // domain for grid points
     const BigDomain = {0..p.N+1, 0..p.M+1};   	// domain including boundary points
-    const TwoBigDomains = {0..p.N+1, 0..p.M+1, 0..1}; // domain including both src+dest
+    const TwoBigDomains = {0..p.N+1, 0..p.M+1, 0..1} dmapped Block(boundingBox={0..p.N+1, 0..p.M+1, 0..0}); // domain including both src+dest
     var data: [TwoBigDomains] real;  		// source, destination temprature array
     var src = 0, dst = 1;			// indexes into array
     var c : [BigDomain] real;	     		// conductivity array
