@@ -3,6 +3,8 @@
 #$ -l h_rt=0:15:00
 #$ -N pcs2014-sge
 #$ -cwd
+#$ -e output/
+#$ -o output/
 
 APP=./heat_multi
 ARGS="-nl 1 -sGt /home/amilburn/data/plasma_1000x1000.pgm -sGc /home/amilburn/data/pat2_1000x1000.pgm -sGm 1000 -sGe 0.0  -sGn 1000 -sGi 2000"
