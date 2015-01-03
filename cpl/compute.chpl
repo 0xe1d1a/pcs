@@ -55,45 +55,52 @@ proc do_compute(p : params)
 
     const ProblemSpace = {1..p.N, 1..p.M};       // domain for grid points
     const BigDomain = {0..p.N+1, 0..p.M+1};   	// domain including boundary points
-    var src, dst: [BigDomain] real;  		// source, destination temprature arrays: 
+    const TwoBigDomains = {0..p.N+1, 0..p.M+1, 0..1}; // domain including both src+dest
+    var data: [TwoBigDomains] real;  		// source, destination temprature array
+    var src = 0, dst = 1;			// indexes into array
     var c : [BigDomain] real;	     		// conductivity array
 
+    var initsrc: [BigDomain] => data[..,..,src];
+    var initdst: [BigDomain] => data[..,..,dst];
+
     // copy initial values
-    dst[ProblemSpace] = p.tinit;
+    initdst[ProblemSpace] = p.tinit;
     c[ProblemSpace] = p.tcond;
 
     for i in 1..p.M {				//smear upper-lower bounds
-	dst[0,i] = dst[1,i];
-        src[0,i] = dst[1,i];
+	initdst[0,i] = initdst[1,i];
+        initsrc[0,i] = initdst[1,i];
 
-	dst[p.N+1,i] = dst[p.N,i];
-	src[p.N+1,i] = dst[p.N,i];
+	initdst[p.N+1,i] = initdst[p.N,i];
+	initsrc[p.N+1,i] = initdst[p.N,i];
     }
     for i in 0..p.N+1 { 				//smear wrap-around bounds
-	dst[i,0] = dst[i,p.M];
-	src[i,0] = dst[i,p.M];
+	initdst[i,0] = initdst[i,p.M];
+	initsrc[i,0] = initdst[i,p.M];
 
-	dst[i,p.M+1] = dst[i,1];
-	src[i,p.M+1] = dst[i,1];
+	initdst[i,p.M+1] = initdst[i,1];
+	initsrc[i,p.M+1] = initdst[i,1];
     }
   
     t.start(); 					//start timer
     for iteration in 1..p.maxiter {
 	dst <=> src;				//swap buffers
+        var cursrc: [BigDomain] => data[..,..,src];
+        var curdst: [BigDomain] => data[..,..,dst];
         forall i in 1..p.N {
           for j in 1..p.M {
             var ij = (i,j);
 
             var cond = c(ij);
 	    var weight = 1.0 - cond;
-	    dst(ij) = cond * src(ij) + 
-	        (src(ij+up) + src(ij+down) + src(ij+left) + src(ij+right)) * (weight * dir) +
-	        (src(ij+upleft) + src(ij+upright) + src(ij+downleft) + src(ij+downright)) * (weight * diag);
+	    curdst(ij) = cond * cursrc(ij) + 
+	        (cursrc(ij+up) + cursrc(ij+down) + cursrc(ij+left) + cursrc(ij+right)) * (weight * dir) +
+	        (cursrc(ij+upleft) + cursrc(ij+upright) + cursrc(ij+downleft) + cursrc(ij+downright)) * (weight * diag);
           }
 	}
 	forall i in 1..p.N {
-            dst[i,0] = dst[i,p.M];
-            dst[i,p.M+1] = dst[i,1];
+            curdst[i,0] = curdst[i,p.M];
+            curdst[i,p.M+1] = curdst[i,1];
 	}
 
 	if (iteration % p.period == 0 || iteration == p.maxiter) {
@@ -106,8 +113,8 @@ proc do_compute(p : params)
 	    var tavg = 0.0;
 	    for i in 1..p.N {
             	for j in 1..p.M {  
-		    var res = dst[i,j];
-		    var old = src[i,j];
+		    var res = curdst[i,j];
+		    var old = cursrc[i,j];
 		    if (res < tmin) then tmin = res;
 		    if (res > tmax) then tmax = res;
 		    tavg += res;
@@ -122,15 +129,15 @@ proc do_compute(p : params)
 
             /* *** second variant: Chapel reduction */
 
-/*            r.maxdiff = max reduce [ij in ProblemSpace] abs(dst[ij] - src[ij]);
-	    r.tmin = min reduce dst[ProblemSpace];
-	    r.tmax = max reduce dst[ProblemSpace];
-	    r.tavg = (+ reduce dst[ProblemSpace]) / (p.N * p.M);*/
+/*            r.maxdiff = max reduce [ij in ProblemSpace] abs(curdst[ij] - cursrc[ij]);
+	    r.tmin = min reduce curdst[ProblemSpace];
+	    r.tmax = max reduce curdst[ProblemSpace];
+	    r.tavg = (+ reduce curdst[ProblemSpace]) / (p.N * p.M);*/
             
             /* *** third variant: custom Chapel reduction */
 
-            r.maxdiff = max reduce [ij in ProblemSpace] abs(dst[ij] - src[ij]);
-            var reduction = heatReduction reduce dst[ProblemSpace];
+            r.maxdiff = max reduce [ij in ProblemSpace] abs(curdst[ij] - cursrc[ij]);
+            var reduction = heatReduction reduce curdst[ProblemSpace];
             r.tmin = reduction.tmin;
             r.tmax = reduction.tmax;
             r.tavg = reduction.tsum / (p.N * p.M);
