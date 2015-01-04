@@ -273,7 +273,9 @@ this.
 \begin{homeworkProblem}[Domain mapping | Chapel]
 
 For the second part of the assignment, we were asked to use domain maps to run our Chapel code on multiple
-nodes.
+nodes. We implemented this by using \texttt{dmapped} on the main domain (\texttt{TwoBigDomains} in our current
+code) and then making the other domains subdomains (which should, in theory, inherit the domain mapping, and
+indeed we see no difference if we specify this manually for every variable/domain, so hopefully this works).
 
 We were not successful in making this work well. Simply adding any domain map to our Chapel code results in a
 large (more than an order of magnitude) performance decrease, without even moving to a multi-locale version
@@ -316,7 +318,7 @@ implemented earlier is also causing problems, although attempting to simply remo
 The results we present here are using the Block distribution with the default values; we didn't
 get improvements from other parameters and certainly not for different distributions (unsurprisingly,
 since for example Cyclic would be crazy given the access patterns involved, and we need the system to
-be consistent so non-synchronized versions are unhelpful).
+be consistent so replicated non-synchronized versions are unhelpful).
 
 \end{homeworkProblem}
 
@@ -334,7 +336,8 @@ TODO
 
 As warned, we had very little success trying to implement distributed heat diffusion
 efficiently in Chapel, and we didn't approach the single-node performance for our
-problem.
+problem. It's clear that trying to implement the algorithm manually without using
+Chapel's built-in parallelisation features is not a promising approach for many reasons.
 
 In conclusion, Chapel is an interesting language which clearly has much potential for
 efficient development of distributed code. However, the implementation is sorely lacking,
