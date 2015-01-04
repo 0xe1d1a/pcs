@@ -323,7 +323,12 @@ get improvements from other parameters and certainly not for different distribut
 since for example Cyclic would be crazy given the access patterns involved, and we need the system to
 be consistent so replicated non-synchronized versions are unhelpful).
 
-Here, we have a figure depicting the performance of different matrices and nodes:
+We couldn't get useful results for the 8 and 16 node versions; when running with non-trivial numbers
+of iterations, the jobs did not finish correctly on DAS-4, we suspect because they took far too long
+(even with job times increased to 45 minutes), and again we felt that our time was not best used debugging
+this issue beyond an hour or so of work.
+
+That said, we have a figure depicting the performance of different matrices and nodes, using 1000 iterations:
 
 \includegraphics[width=0.75\columnwidth]{figure_eff.png} 
 
@@ -334,7 +339,11 @@ And here, the same results, but presented using time:
 Unfortunately, given our problems, we don't think there is much meaningfulness to be attached to
 this code; we'd hoped to be able to discuss how they might provide evidence that the entire dataset
 is being copied excessively, and that no smart halo-cell type copying is going on, but instead the
-results mostly serve to confuse us further.
+results mostly serve to confuse us further. The $100 \times 20000$ matrix results for 2 nodes in
+particular confuse us terribly (and as you can see from the error bar, this is not just a hiccup
+in a single run, but rather something structural). You can, however, clearly see that for the $1000 \times 1000$
+case we do get improved performance when adding more nodes, and that is at least as expected/hoped.
+Hopefully with larger matrix sizes this difference would be far more significant..
 
 \end{homeworkProblem}
 
