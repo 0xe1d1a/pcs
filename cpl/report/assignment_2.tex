@@ -252,7 +252,7 @@ and those with reduction:
 ./heat -e 0.0 -i 2000 -k 1
 \end{verbatim}
 
-\textbf{Improvements}
+\textbf{Further Discussion}
 
 As discussed in the last session, large performance improvements can be obtained by using indexes into an
 additional dimension, rather than swapping the entire contents of the arrays\cite{possdim}. We implemented this
@@ -263,6 +263,10 @@ here, since it's beyond the deadline of the first sub-assignment).
 
 We also discovered that it is possible to include all reductions in the same custom reduction operator,
 with (marginally) improved performance.
+
+Finally, we learnt from the last session that it's possible to set the number of threads per locale to use from
+within Chapel, rather than making use of \texttt{CHPL\_RT\_NUM\_THREADS\_PER\_LOCALE}, but we haven't implemented
+this.
 
 \end{homeworkProblem}
 
