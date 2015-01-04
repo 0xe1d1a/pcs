@@ -310,7 +310,9 @@ block distribution, which reveals a huge number of Block distributions being cre
 otherwise gives little insight into our performance problems.
 
 After we excluded some obvious potential causes for the performance problems (such as disabling
-the smearing of the start/end columns), we decided to give up on further investigation and move
+the smearing of the start/end columns, which added some extra complexity and also caused code to
+only run on two locales for the cases where we split the locales up along the columns dimension),
+we decided to give up on further investigation and move
 onto the next sub-assignment, since the fact that the performance is so bad for the non-multi-locale
 version indicates some fundamental failure. It's possible that the additional dimension approach we
 implemented earlier is also causing problems, although attempting to simply remove this was not helpful.
