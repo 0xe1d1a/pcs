@@ -275,8 +275,9 @@ this.
 For the second part of the assignment, we were asked to use domain maps to run our Chapel code on multiple
 nodes.
 
-We were not successful in making this work well. Simply adding domain maps to our Chapel code results in a
-large (more than an order of magnitude) performance decrease.
+We were not successful in making this work well. Simply adding any domain map to our Chapel code results in a
+large (more than an order of magnitude) performance decrease, without even moving to a multi-locale version
+compiled with gasnet support.
 
 By printing \texttt{TwoBigDomains.dist} and \texttt{ProblemSpace.dist} (for example), it is possible to see
 that the blocks get mapped to the locales in the intended fashion. For example, if we try a naive Block-based
@@ -306,9 +307,24 @@ Compiling the Chapel code with \texttt{-sdebugBlockDist=true} enables debugging 
 block distribution, which reveals a huge number of Block distributions being created, but
 otherwise gives little insight into our performance problems.
 
+After we excluded some obvious potential causes for the performance problems (such as disabling
+the smearing of the start/end columns), we decided to give up on further investigation and move
+onto the next sub-assignment, since the fact that the performance is so bad for the non-multi-locale
+version indicates some fundamental failure. It's possible that the additional dimension approach we
+implemented earlier is also causing problems, although attempting to simply remove this was not helpful.
+
+The results we present here are using the Block distribution with the default values; we didn't
+get improvements from other parameters and certainly not for different distributions (unsurprisingly,
+since for example Cyclic would be crazy given the access patterns involved, and we need the system to
+be consistent so non-synchronized versions are unhelpful).
+
 \end{homeworkProblem}
 
 \begin{homeworkProblem}[Low-level implementation | Chapel]
+
+The limitations of the Chapel compiler itself became quickly apparant while trying
+to implement this code; we constantly encountered compiler internal errors with no
+further information, making development a very time-consuming process.
 
 TODO
 
