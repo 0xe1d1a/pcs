@@ -1,0 +1,18 @@
+#!/bin/bash
+#$ -pe openmpi 128
+#$ -l h_rt=0:15:00
+#$ -N pcs2014-sge-16
+#$ -cwd
+#$ -e output/
+#$ -o output/
+
+APP=./heat_multi
+ARGS="-nl 16 -sGt /home/amilburn/data/plasma_1000x1000.pgm -sGc /home/amilburn/data/pat2_1000x1000.pgm -sGm 1000 -sGe 0.0  -sGn 1000 -sGi 1000"
+
+# Get OpenMPI settings
+. /etc/bashrc
+
+SSH_SERVERS=`uniq $TMPDIR/machines  | tr '\n' ' '`
+PATH=/usr/bin:$PATH
+
+CHPL_COMM=gasnet CHPL_COMM_SUBSTRATE=ibv SSH_SERVERS="$SSH_SERVERS" $APP $ARGS
