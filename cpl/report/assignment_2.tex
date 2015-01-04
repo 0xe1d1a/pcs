@@ -141,8 +141,9 @@
 %----------------------------------------------------------------------------------------
 \begin{homeworkProblem}[Introduction]
 
-This (sub-)assignment asked us to implement heat dissipation in Chapel and perform comparison experiments
-with our previous implementations.
+This assignment asked us to implement heat dissipation in Chapel and perform comparison experiments
+with our previous implementations, and then to experiment further with distributed arrays (using
+domain maps) and more low-level distributed methods.
 
 
 \end{homeworkProblem}
@@ -249,6 +250,65 @@ and those with reduction:
 ./heat -e 0.0 -i 2000 -k 1
 \end{verbatim}
 
+\textbf{Improvements}
+
+As discussed in the last session, large performance improvements can be obtained by using indexes into an
+additional dimension, rather than swapping the entire contents of the arrays\cite{possdim}. We implemented this
+using array aliasing as shown below, and obtained considerable speed improvements (which we won't discuss further
+here, since it's beyond the deadline of the first sub-assignment).
+
+\csnippet{extradim}{Using an additional dimension}
+
+We also discovered that it is possible to include all reductions in the same custom reduction operator,
+with (marginally) improved performance.
+
 \end{homeworkProblem}
+
+\begin{homeworkProblem}[Domain mapping | Chapel]
+
+For the second part of the assignment, we were asked to use domain maps to run our Chapel code on multiple
+nodes.
+
+We were not successful in making this work well. Simply adding domain maps to our Chapel code results in a
+large (more than an order of magnitude) performance decrease.
+
+By printing \texttt{TwoBigDomains.dist} and \texttt{ProblemSpace.dist} (for example), it is possible to see
+that the blocks get mapped to the locales in the intended fashion. For example, if we try a naive Block-based
+distribution with a $1000 \times 1000$ matrix and two locales, it is split (as expected) into two parts, with
+the extra dimension for our `swap trick' correctly not being distributed:
+
+\begin{verbatim}
+Block
+-------
+distributes: {1..1000, 1..1000, 0..0}
+resulting in: 
+  [(0, 0, 0)] locale 0 owns chunk: {..500, .., ..}
+  [(1, 0, 0)] locale 1 owns chunk: {501.., .., ..}
+
+Block
+-------
+distributes: {1..1000, 1..1000}
+across locales: LOCALE0
+LOCALE1
+indexed via: {0..1, 0..0}
+resulting in: 
+  [(0, 0)] locale 0 owns chunk: {..500, ..}
+  [(1, 0)] locale 1 owns chunk: {501.., ..}
+\end{verbatim}
+
+Compiling the Chapel code with \texttt{-sdebugBlockDist=true} enables debugging for the
+block distribution, which reveals a huge number of Block distributions being created, but
+otherwise gives little insight into our performance problems.
+
+\end{homeworkProblem}
+
+\begin{thebibliography}{9}
+
+\bibitem{possdim}
+  Raphael Poss,
+  \emph{Pointer Operations in Chapel}.\\
+  \texttt{https://sourceforge.net/p/chapel/mailman/message/27306614/}
+
+\end{thebibliography}
 
 \end{document}
