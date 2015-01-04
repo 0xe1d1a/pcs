@@ -315,18 +315,26 @@ onto the next sub-assignment, since the fact that the performance is so bad for 
 version indicates some fundamental failure. It's possible that the additional dimension approach we
 implemented earlier is also causing problems, although attempting to simply remove this was not helpful.
 
+Since our problems seemed to be present even when running locally, we didn't investigate the remote
+accesses (using the comm diagnostics features of Chapel).
+
 The results we present here are using the Block distribution with the default values; we didn't
 get improvements from other parameters and certainly not for different distributions (unsurprisingly,
 since for example Cyclic would be crazy given the access patterns involved, and we need the system to
 be consistent so replicated non-synchronized versions are unhelpful).
 
-Figure depicting performance of different node usage
+Here, we have a figure depicting the performance of different matrices and nodes:
 
 \includegraphics[width=0.75\columnwidth]{figure_eff.png} 
 
-Figure depicting wall time of different node usage
+And here, the same results, but presented using time:
 
 \includegraphics[width=0.75\columnwidth]{figure_wt.png} 
+
+Unfortunately, given our problems, we don't think there is much meaningfulness to be attached to
+this code; we'd hoped to be able to discuss how they might provide evidence that the entire dataset
+is being copied excessively, and that no smart halo-cell type copying is going on, but instead the
+results mostly serve to confuse us further.
 
 \end{homeworkProblem}
 
@@ -336,7 +344,30 @@ The limitations of the Chapel compiler itself became quickly apparant while tryi
 to implement this code; we constantly encountered compiler internal errors with no
 further information, making development a very time-consuming process.
 
-TODO
+Our relatively simple final attempt, which tries to minimise the changes to the design
+of the other Chapel code, is provided as \texttt{compute\_manual.chpl};
+it splits the data up into columns, with one column per locale, much like the block map concept.
+
+For each iteration of the main loop, each locale runs computation code in parallel.
+This code copies data out of the `global' data matrix, not only the column which it will
+be working on but also a certain amount of overlap on each side (specifiable using a
+parameter) which provides the requested \emph{halo nodes}. It then performs the
+calculation repeatedly on the column, in a loop, as many times as there is overlap
+available (i.e. if we have an overlap of 1 then we can only run one calculation,
+because then we will need data from other nodes, but if we have an overlap of 2 then
+in the second iteration we can still do the calculation on the inner halo cells based
+on the values of the outer halo cells calculated at the first iteration).
+
+Finally, each locale copies data back into the main matrix. This is not at all efficient
+(each locale only really needs to copy the overlapping data to/from its neighbour locales),
+but in our final attempt we implemented this in this fashion since we hoped it would
+avoid having to adapt the reduction code.
+
+It does not work at all for a single locale (because it doesn't support copying from
+both sides at once), and gives incorrect results anyway. In hindsight, it would have
+worked better if we'd split into groups of rows (since we wouldn't have to deal with
+the wraparound problems), but unfortunately we didn't succeed in making this work in
+the time available to us.
 
 \end{homeworkProblem}
 
