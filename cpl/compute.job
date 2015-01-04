@@ -1,5 +1,5 @@
 #!/bin/bash
-#$ -pe openmpi 8
+#$ -pe openmpi 16
 #$ -l h_rt=0:15:00
 #$ -N pcs2014-sge
 #$ -cwd
@@ -7,7 +7,7 @@
 #$ -o output/
 
 APP=./heat_multi
-ARGS="-nl 1 -sGt /home/amilburn/data/plasma_1000x1000.pgm -sGc /home/amilburn/data/pat2_1000x1000.pgm -sGm 1000 -sGe 0.0  -sGn 1000 -sGi 2000"
+ARGS="-nl 2 -sGt /home/amilburn/data/plasma_1000x1000.pgm -sGc /home/amilburn/data/pat2_1000x1000.pgm -sGm 1000 -sGe 0.0  -sGn 1000 -sGi 1000"
 
 # Get OpenMPI settings
 . /etc/bashrc

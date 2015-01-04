@@ -53,15 +53,18 @@ proc do_compute(p : params)
     const down = (-1,0), up = (1,0), right = (0,1), left = (0,-1);
     const upright = (1,1), downright = (-1,1), upleft = (1,-1), downleft = (-1,-1);
 
-    const ProblemSpace = {1..p.N, 1..p.M};       // domain for grid points
-    const BigDomain = {0..p.N+1, 0..p.M+1};   	// domain including boundary points
-    const TwoBigDomains = {0..p.N+1, 0..p.M+1, 0..1} dmapped Block(boundingBox={0..p.N+1, 0..p.M+1, 0..0}); // domain including both src+dest
+    const TwoBigDomains = {0..p.N+1, 0..p.M+1, 0..1} dmapped Block(boundingBox={1..p.N, 1..p.M, 0..0}); // domain including both src+dest
+    const BigDomain = TwoBigDomains[0..p.N+1, 0..p.M+1, 0];		   	// domain including boundary points
+    const ProblemSpace = BigDomain[1..p.N, 1..p.M];
     var data: [TwoBigDomains] real;  		// source, destination temprature array
     var src = 0, dst = 1;			// indexes into array
     var c : [BigDomain] real;	     		// conductivity array
 
     var initsrc: [BigDomain] => data[..,..,src];
     var initdst: [BigDomain] => data[..,..,dst];
+
+    writeln(TwoBigDomains.dist);
+    writeln(ProblemSpace.dist);
 
     // copy initial values
     initdst[ProblemSpace] = p.tinit;
@@ -87,16 +90,17 @@ proc do_compute(p : params)
 	dst <=> src;				//swap buffers
         var cursrc: [BigDomain] => data[..,..,src];
         var curdst: [BigDomain] => data[..,..,dst];
-        forall i in 1..p.N {
+/*        forall i in 1..p.N {
           for j in 1..p.M {
-            var ij = (i,j);
+            var ij = (i,j);*/
 
+        forall ij in ProblemSpace {
             var cond = c(ij);
 	    var weight = 1.0 - cond;
 	    curdst(ij) = cond * cursrc(ij) + 
 	        (cursrc(ij+up) + cursrc(ij+down) + cursrc(ij+left) + cursrc(ij+right)) * (weight * dir) +
 	        (cursrc(ij+upleft) + cursrc(ij+upright) + cursrc(ij+downleft) + cursrc(ij+downright)) * (weight * diag);
-          }
+//          }
 	}
 	forall i in 1..p.N {
             curdst[i,0] = curdst[i,p.M];
